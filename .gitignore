@@ -1,0 +1,7 @@
+/.build
+/.release
+/.tarballs
+/stackdriver_exporter
+*.tar.gz
+*.test
+*-stamp

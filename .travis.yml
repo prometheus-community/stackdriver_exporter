@@ -1,0 +1,5 @@
+language: go
+
+go_import_path: github.com/frodenas/stackdriver_exporter
+
+script: make test
