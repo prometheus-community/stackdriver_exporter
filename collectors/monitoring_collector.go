@@ -141,8 +141,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				timeSeriesListCall := c.monitoringService.Projects.TimeSeries.List(utils.ProjectResource(c.projectID)).
 					Filter(fmt.Sprintf("metric.type=\"%s\"", metricDescriptor.Type)).
 					IntervalStartTime(startTime.Format(time.RFC3339Nano)).
-					IntervalEndTime(endTime.Format(time.RFC3339Nano)).
-					View("FULL").PageSize(1)
+					IntervalEndTime(endTime.Format(time.RFC3339Nano))
 
 				for {
 					page, err := timeSeriesListCall.Do()
