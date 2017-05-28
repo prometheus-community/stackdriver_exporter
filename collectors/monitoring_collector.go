@@ -1,6 +1,7 @@
 package collectors
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -205,10 +206,19 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 func (c *MonitoringCollector) reportTimeSeriesMetrics(page *monitoring.ListTimeSeriesResponse, metricDescriptor *monitoring.MetricDescriptor, ch chan<- prometheus.Metric) error {
 	var metricValue float64
 	var metricValueType prometheus.ValueType
+	var newestTSPoint *monitoring.Point
 
 	for _, timeSeries := range page.TimeSeries {
-		if len(timeSeries.Points) < 1 {
-			continue
+		newestEndTime := time.Unix(0, 0)
+		for _, point := range timeSeries.Points {
+			endTime, err := time.Parse(time.RFC3339Nano, point.Interval.EndTime)
+			if err != nil {
+				return errors.New(fmt.Sprintf("Error parsing TimeSeries Point interval end time `%s`: %s", point.Interval.EndTime, err))
+			}
+			if endTime.After(newestEndTime) {
+				newestEndTime = endTime
+				newestTSPoint = point
+			}
 		}
 
 		switch timeSeries.MetricKind {
@@ -225,13 +235,13 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(page *monitoring.ListTimeS
 		switch timeSeries.ValueType {
 		case "BOOL":
 			metricValue = 0
-			if *timeSeries.Points[0].Value.BoolValue {
+			if *newestTSPoint.Value.BoolValue {
 				metricValue = 1
 			}
 		case "INT64":
-			metricValue = float64(*timeSeries.Points[0].Value.Int64Value)
+			metricValue = float64(*newestTSPoint.Value.Int64Value)
 		case "DOUBLE":
-			metricValue = *timeSeries.Points[0].Value.DoubleValue
+			metricValue = *newestTSPoint.Value.DoubleValue
 		default:
 			log.Debugf("Discarding `%s` metric: %+v", timeSeries.ValueType, timeSeries)
 			continue
