@@ -75,8 +75,9 @@ The exporter returns the following metrics:
 
 Metrics gathered from Google Stackdriver Monitoring are converted to Prometheus metrics:
 * Metrics names are normalized using Prometheus [specification][metrics-name].
-* Only `BOOL`, `INT64` and `DOUBLE` metric types are supported, other types are discarded.
-* For each timeseries, Only the most recent data point is exported.
+* For each timeseries, only the most recent data point is exported.
+* Stackdriver `GAUGE` metric kinds are reported as Prometheus `Gauge` metrics; Stackdriver `DELTA` and `CUMULATIVE` metric kinds are reported as Prometheus `Counter` metrics.
+* Only `BOOL`, `INT64` and `DOUBLE` metric types are supported, other types (`STRING`, `DISTRIBUTION` and `MONEY`) are discarded.
 
 ## Contributing
 
