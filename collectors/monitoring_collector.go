@@ -18,6 +18,7 @@ type MonitoringCollector struct {
 	metricsPrefix                   string
 	metricsInterval                 time.Duration
 	monitoringService               *monitoring.Service
+	apiCallsTotalMetric             prometheus.Counter
 	scrapesTotalMetric              prometheus.Counter
 	scrapeErrorsTotalMetric         prometheus.Counter
 	lastScrapeErrorMetric           prometheus.Gauge
@@ -26,6 +27,16 @@ type MonitoringCollector struct {
 }
 
 func NewMonitoringCollector(projectID string, metricsPrefix string, metricsInterval time.Duration, monitoringService *monitoring.Service) (*MonitoringCollector, error) {
+	apiCallsTotalMetric := prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace:   "stackdriver",
+			Subsystem:   "monitoring",
+			Name:        "api_calls_total",
+			Help:        "Total number of Google Stackdriver Monitoring API calls made.",
+			ConstLabels: prometheus.Labels{"project_id": projectID},
+		},
+	)
+
 	scrapesTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace:   "stackdriver",
@@ -81,6 +92,7 @@ func NewMonitoringCollector(projectID string, metricsPrefix string, metricsInter
 		metricsPrefix:                   metricsPrefix,
 		metricsInterval:                 metricsInterval,
 		monitoringService:               monitoringService,
+		apiCallsTotalMetric:             apiCallsTotalMetric,
 		scrapesTotalMetric:              scrapesTotalMetric,
 		scrapeErrorsTotalMetric:         scrapeErrorsTotalMetric,
 		lastScrapeErrorMetric:           lastScrapeErrorMetric,
@@ -92,6 +104,7 @@ func NewMonitoringCollector(projectID string, metricsPrefix string, metricsInter
 }
 
 func (c *MonitoringCollector) Describe(ch chan<- *prometheus.Desc) {
+	c.apiCallsTotalMetric.Describe(ch)
 	c.scrapesTotalMetric.Describe(ch)
 	c.scrapeErrorsTotalMetric.Describe(ch)
 	c.lastScrapeErrorMetric.Describe(ch)
@@ -110,6 +123,8 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 	c.scrapeErrorsTotalMetric.Collect(ch)
 
+	c.apiCallsTotalMetric.Collect(ch)
+
 	c.scrapesTotalMetric.Inc()
 	c.scrapesTotalMetric.Collect(ch)
 
@@ -126,6 +141,8 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metric) error {
 	metricDescriptorsFunction := func(page *monitoring.ListMetricDescriptorsResponse) error {
 		var wg = &sync.WaitGroup{}
+
+		c.apiCallsTotalMetric.Inc()
 
 		doneChannel := make(chan bool, 1)
 		errChannel := make(chan error, 1)
@@ -144,6 +161,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					IntervalEndTime(endTime.Format(time.RFC3339Nano))
 
 				for {
+					c.apiCallsTotalMetric.Inc()
 					page, err := timeSeriesListCall.Do()
 					if err != nil {
 						errChannel <- err

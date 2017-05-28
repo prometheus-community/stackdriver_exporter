@@ -66,6 +66,7 @@ The exporter returns the following metrics:
 
 | Metric | Description | Labels |
 | ------ | ----------- | ------ |
+| `stackdriver_monitoring_api_calls_total` | Total number of Google Stackdriver Monitoring API calls made | `project_id` |
 | `stackdriver_monitoring_scrapes_total` | Total number of Google Stackdriver Monitoring metrics scrapes | `project_id` |
 | `stackdriver_monitoring_scrape_errors_total` | Total number of Google Stackdriver Monitoring metrics scrape errors | `project_id` |
 | `stackdriver_monitoring_last_scrape_error` | Whether the last metrics scrape from Google Stackdriver Monitoring resulted in an error (`1` for error, `0` for success) | `project_id` |
