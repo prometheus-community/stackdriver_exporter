@@ -24,9 +24,9 @@ var (
 		"Google Project ID ($STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID).",
 	)
 
-	monitoringMetricsPrefix = flag.String(
-		"monitoring.metrics-prefix", "",
-		"Google Stackdriver Monitoring Metrics Type prefix ($STACKDRIVER_EXPORTER_MONITORING_METRICS_PREFIX).",
+	monitoringMetricsTypePrefix = flag.String(
+		"monitoring.metrics-type-prefix", "",
+		"Google Stackdriver Monitoring Metrics Type prefix ($STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIX).",
 	)
 
 	monitoringMetricsInterval = flag.Duration(
@@ -56,7 +56,7 @@ func init() {
 
 func overrideFlagsWithEnvVars() {
 	overrideWithEnvVar("STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID", projectID)
-	overrideWithEnvVar("STACKDRIVER_EXPORTER_MONITORING_METRICS_PREFIX", monitoringMetricsPrefix)
+	overrideWithEnvVar("STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIX", monitoringMetricsTypePrefix)
 	overrideWithEnvDuration("STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL", monitoringMetricsInterval)
 	overrideWithEnvVar("STACKDRIVER_EXPORTER_WEB_LISTEN_ADDRESS", listenAddress)
 	overrideWithEnvVar("STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH", metricsPath)
@@ -110,8 +110,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *monitoringMetricsPrefix == "" {
-		log.Error("Flag `monitoring.metrics-prefix` is required")
+	if *monitoringMetricsTypePrefix == "" {
+		log.Error("Flag `monitoring.metrics-type-prefix` is required")
 		os.Exit(1)
 	}
 
@@ -124,7 +124,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	monitoringCollector, err := collectors.NewMonitoringCollector(*projectID, *monitoringMetricsPrefix, *monitoringMetricsInterval, monitoringService)
+	monitoringCollector, err := collectors.NewMonitoringCollector(*projectID, *monitoringMetricsTypePrefix, *monitoringMetricsInterval, monitoringService)
 	if err != nil {
 		log.Error(err)
 		os.Exit(1)
