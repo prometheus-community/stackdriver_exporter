@@ -55,7 +55,7 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 | Flag / Environment Variable | Required | Default | Description |
 | --------------------------- | -------- | ------- | ----------- |
 | `google.project-id`<br />`STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID` | Yes | | Google Project ID |
-| `monitoring.metrics-type-prefixes`<br />`STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES` | Yes | | Comma separated Google Stackdriver Monitoring Metric Type prefixes (see [available metrics][metrics-list]) |
+| `monitoring.metrics-type-prefixes`<br />`STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES` | Yes | | Comma separated Google Stackdriver Monitoring Metric Type prefixes (see [example][metrics-prefix-example] and [available metrics][metrics-list]) |
 | `monitoring.metrics-interval`<br />`STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL` | No | `1m` | Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used |
 | `web.listen-address`<br />`STACKDRIVER_EXPORTER_WEB_LISTEN_ADDRESS` | No | `:9255` | Address to listen on for web interface and telemetry |
 | `web.telemetry-path`<br />`STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH` | No | `/metrics` | Path under which to expose Prometheus metrics |
@@ -79,6 +79,16 @@ Metrics gathered from Google Stackdriver Monitoring are converted to Prometheus 
 * Stackdriver `GAUGE` metric kinds are reported as Prometheus `Gauge` metrics; Stackdriver `DELTA` and `CUMULATIVE` metric kinds are reported as Prometheus `Counter` metrics.
 * Only `BOOL`, `INT64` and `DOUBLE` metric types are supported, other types (`STRING`, `DISTRIBUTION` and `MONEY`) are discarded.
 
+### Example
+
+If we want to get all `CPU` (`compute.googleapis.com/instance/cpu`) and `Disk` (`compute.googleapis.com/instance/disk`) metrics for all [Google Compute Engine][google-compute] instances, we can run the exporter with the following options:
+
+```
+stackdriver_exporter \
+  -google.project-id my-test-project \
+  -monitoring.metrics-type-prefixes "compute.googleapis.com/instance/cpu,compute.googleapis.com/instance/disk"
+```
+
 ## Contributing
 
 Refer to the [contributing guidelines][contributing].
@@ -93,9 +103,11 @@ Apache License 2.0, see [LICENSE][license].
 [binaries]: https://github.com/frodenas/stackdriver_exporter/releases
 [cloudfoundry]: https://www.cloudfoundry.org/
 [contributing]: https://github.com/frodenas/stackdriver_exporter/blob/master/CONTRIBUTING.md
+[google-compute]: https://cloud.google.com/compute/
 [golang]: https://golang.org/
 [license]: https://github.com/frodenas/stackdriver_exporter/blob/master/LICENSE
 [manifest]: https://github.com/frodenas/stackdriver_exporter/blob/master/manifest.yml
+[metrics-prefix-example]: https://github.com/frodenas/stackdriver_exporter#example
 [metrics-list]: https://cloud.google.com/monitoring/api/metrics
 [metrics-name]: https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
 [prometheus]: https://prometheus.io/
