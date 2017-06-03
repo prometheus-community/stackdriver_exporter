@@ -192,14 +192,34 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 		return nil
 	}
 
+	var wg = &sync.WaitGroup{}
+
+	doneChannel := make(chan bool, 1)
+	errChannel := make(chan error, 1)
+
 	for _, metricsTypePrefix := range c.metricsTypePrefixes {
-		log.Debugf("Listing Google Stackdriver Monitoring metric descriptors starting with `%s`...", metricsTypePrefix)
-		ctx := context.Background()
-		if err := c.monitoringService.Projects.MetricDescriptors.List(utils.ProjectResource(c.projectID)).
-			Filter(fmt.Sprintf("metric.type = starts_with(\"%s\")", metricsTypePrefix)).
-			Pages(ctx, metricDescriptorsFunction); err != nil {
-			return err
-		}
+		wg.Add(1)
+		go func(metricsTypePrefix string) {
+			defer wg.Done()
+			log.Debugf("Listing Google Stackdriver Monitoring metric descriptors starting with `%s`...", metricsTypePrefix)
+			ctx := context.Background()
+			if err := c.monitoringService.Projects.MetricDescriptors.List(utils.ProjectResource(c.projectID)).
+				Filter(fmt.Sprintf("metric.type = starts_with(\"%s\")", metricsTypePrefix)).
+				Pages(ctx, metricDescriptorsFunction); err != nil {
+				errChannel <- err
+			}
+		}(metricsTypePrefix)
+	}
+
+	go func() {
+		wg.Wait()
+		close(doneChannel)
+	}()
+
+	select {
+	case <-doneChannel:
+	case err := <-errChannel:
+		return err
 	}
 
 	return nil
