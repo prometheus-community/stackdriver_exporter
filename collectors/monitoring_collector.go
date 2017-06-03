@@ -16,7 +16,7 @@ import (
 
 type MonitoringCollector struct {
 	projectID                       string
-	metricsTypePrefix               string
+	metricsTypePrefixes             []string
 	metricsInterval                 time.Duration
 	monitoringService               *monitoring.Service
 	apiCallsTotalMetric             prometheus.Counter
@@ -27,7 +27,7 @@ type MonitoringCollector struct {
 	lastScrapeDurationSecondsMetric prometheus.Gauge
 }
 
-func NewMonitoringCollector(projectID string, metricsTypePrefix string, metricsInterval time.Duration, monitoringService *monitoring.Service) (*MonitoringCollector, error) {
+func NewMonitoringCollector(projectID string, metricsTypePrefixes []string, metricsInterval time.Duration, monitoringService *monitoring.Service) (*MonitoringCollector, error) {
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace:   "stackdriver",
@@ -90,7 +90,7 @@ func NewMonitoringCollector(projectID string, metricsTypePrefix string, metricsI
 
 	monitoringCollector := &MonitoringCollector{
 		projectID:                       projectID,
-		metricsTypePrefix:               metricsTypePrefix,
+		metricsTypePrefixes:             metricsTypePrefixes,
 		metricsInterval:                 metricsInterval,
 		monitoringService:               monitoringService,
 		apiCallsTotalMetric:             apiCallsTotalMetric,
@@ -192,12 +192,14 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 		return nil
 	}
 
-	log.Debugf("Listing Google Stackdriver Monitoring metric descriptors starting with `%s`...", c.metricsTypePrefix)
-	ctx := context.Background()
-	if err := c.monitoringService.Projects.MetricDescriptors.List(utils.ProjectResource(c.projectID)).
-		Filter(fmt.Sprintf("metric.type = starts_with(\"%s\")", c.metricsTypePrefix)).
-		Pages(ctx, metricDescriptorsFunction); err != nil {
-		return err
+	for _, metricsTypePrefix := range c.metricsTypePrefixes {
+		log.Debugf("Listing Google Stackdriver Monitoring metric descriptors starting with `%s`...", metricsTypePrefix)
+		ctx := context.Background()
+		if err := c.monitoringService.Projects.MetricDescriptors.List(utils.ProjectResource(c.projectID)).
+			Filter(fmt.Sprintf("metric.type = starts_with(\"%s\")", metricsTypePrefix)).
+			Pages(ctx, metricDescriptorsFunction); err != nil {
+			return err
+		}
 	}
 
 	return nil

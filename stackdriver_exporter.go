@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -24,9 +25,9 @@ var (
 		"Google Project ID ($STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID).",
 	)
 
-	monitoringMetricsTypePrefix = flag.String(
-		"monitoring.metrics-type-prefix", "",
-		"Google Stackdriver Monitoring Metrics Type prefix ($STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIX).",
+	monitoringMetricsTypePrefixes = flag.String(
+		"monitoring.metrics-type-prefixes", "",
+		"Comma separated Google Stackdriver Monitoring Metric Type prefixes ($STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES).",
 	)
 
 	monitoringMetricsInterval = flag.Duration(
@@ -56,7 +57,7 @@ func init() {
 
 func overrideFlagsWithEnvVars() {
 	overrideWithEnvVar("STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID", projectID)
-	overrideWithEnvVar("STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIX", monitoringMetricsTypePrefix)
+	overrideWithEnvVar("STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES", monitoringMetricsTypePrefixes)
 	overrideWithEnvDuration("STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL", monitoringMetricsInterval)
 	overrideWithEnvVar("STACKDRIVER_EXPORTER_WEB_LISTEN_ADDRESS", listenAddress)
 	overrideWithEnvVar("STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH", metricsPath)
@@ -110,10 +111,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *monitoringMetricsTypePrefix == "" {
-		log.Error("Flag `monitoring.metrics-type-prefix` is required")
+	if *monitoringMetricsTypePrefixes == "" {
+		log.Error("Flag `monitoring.metrics-type-prefixes` is required")
 		os.Exit(1)
 	}
+	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
 
 	log.Infoln("Starting stackdriver_exporter", version.Info())
 	log.Infoln("Build context", version.BuildContext())
@@ -124,7 +126,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	monitoringCollector, err := collectors.NewMonitoringCollector(*projectID, *monitoringMetricsTypePrefix, *monitoringMetricsInterval, monitoringService)
+	monitoringCollector, err := collectors.NewMonitoringCollector(*projectID, metricsTypePrefixes, *monitoringMetricsInterval, monitoringService)
 	if err != nil {
 		log.Error(err)
 		os.Exit(1)
