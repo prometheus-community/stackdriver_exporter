@@ -6,6 +6,8 @@ pkgs   = $(shell $(GO) list ./... | grep -v /vendor/)
 PREFIX                  ?= $(shell pwd)
 BIN_DIR                 ?= $(shell pwd)
 TARBALLS_DIR            ?= $(shell pwd)/.tarballs
+DOCKER_IMAGE_NAME       ?= stackdriver-exporter
+DOCKER_IMAGE_TAG        ?= $(subst /,-,$(shell git rev-parse --abbrev-ref HEAD))
 
 all: format build test
 
@@ -54,4 +56,8 @@ release: promu
 	@echo ">> uploading tarballs to the Github release"
 	@$(PROMU) release ${TARBALLS_DIR}
 
-.PHONY: all deps format style vet test promu build crossbuild tarball tarballs release
+docker:
+	@echo ">> building docker image"
+	@docker build -t "$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)" .
+
+.PHONY: all deps format style vet test promu build crossbuild tarball tarballs release docker
