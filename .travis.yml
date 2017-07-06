@@ -11,10 +11,9 @@ jobs:
   include:
     - stage: tests
       script: make test
-    - stage: build
-      script: make crossbuild
-    - stage: build docker image
+    - stage: docker image
       script:
+        - make crossbuild
         - ln -s .build/linux-amd64/stackdriver_exporter stackdriver_exporter
         - |
           if [ -n "$TRAVIS_TAG" ]; then
