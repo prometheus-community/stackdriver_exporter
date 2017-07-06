@@ -21,6 +21,14 @@ $ go install github.com/frodenas/stackdriver_exporter
 $ stackdriver_exporter <flags>
 ```
 
+### Docker
+
+To run the stackdriver exporter as a Docker container, run:
+
+```bash
+$ docker run -p 9255:9255 frodenas/stackdriver-exporter <flags>
+```
+
 ### Cloud Foundry
 
 The exporter can be deployed to an already existing [Cloud Foundry][cloudfoundry] environment:
