@@ -18,8 +18,8 @@ jobs:
         - ln -s .build/linux-amd64/stackdriver_exporter stackdriver_exporter
         - |
           if [ -n "$TRAVIS_TAG" ]; then
-            make docker DOCKER_IMAGE_NAME=$DOCKER_IMAGE_NAME DOCKER_IMAGE_TAG=$TRAVIS_TAG
+            make docker DOCKER_IMAGE_TAG=$TRAVIS_TAG
           else
-            make docker DOCKER_IMAGE_NAME=$DOCKER_IMAGE_NAME
+            make docker
           fi
         -  docker images
