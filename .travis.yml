@@ -7,6 +7,9 @@ go_import_path: github.com/frodenas/stackdriver_exporter
 services:
   - docker
 
+env:
+  - DOCKER_IMAGE_NAME=frodenas/stackdriver-exporter
+
 jobs:
   include:
     - stage: tests
@@ -17,8 +20,12 @@ jobs:
         - ln -s .build/linux-amd64/stackdriver_exporter stackdriver_exporter
         - |
           if [ -n "$TRAVIS_TAG" ]; then
-            make docker DOCKER_IMAGE_TAG=$TRAVIS_TAG
+            make docker DOCKER_IMAGE_NAME=$DOCKER_IMAGE_NAME DOCKER_IMAGE_TAG=$TRAVIS_TAG
           else
-            make docker
+            make docker DOCKER_IMAGE_NAME=$DOCKER_IMAGE_NAME
           fi
-        -  docker images
+        - |
+          if [[ "$TRAVIS_TAG" =~ ^v[0-9]+(\.[0-9]+){2}$ ]]; then
+            docker tag "$DOCKER_IMAGE_NAME:$TRAVIS_TAG" "$DOCKER_IMAGE_NAME:latest"
+          fi
+        - docker images
