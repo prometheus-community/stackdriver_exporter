@@ -35,3 +35,4 @@ jobs:
           fi
         - docker images
         - docker login -e $DOCKER_EMAIL -u $DOCKER_LOGIN -p $DOCKER_PASSWORD
+        - docker push $DOCKER_IMAGE_NAME
