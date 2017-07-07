@@ -34,5 +34,5 @@ jobs:
             docker tag "$DOCKER_IMAGE_NAME:$TRAVIS_TAG" "$DOCKER_IMAGE_NAME:latest"
           fi
         - docker images
-        - docker login -e $DOCKER_EMAIL -u $DOCKER_LOGIN -p $DOCKER_PASSWORD
+        - docker login -u $DOCKER_LOGIN -p $DOCKER_PASSWORD
         - docker push $DOCKER_IMAGE_NAME
