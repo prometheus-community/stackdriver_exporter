@@ -166,9 +166,11 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					page, err := timeSeriesListCall.Do()
 					if err != nil {
 						errChannel <- err
+						break
 					}
 					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch); err != nil {
 						errChannel <- err
+						break
 					}
 					if page.NextPageToken == "" {
 						break
