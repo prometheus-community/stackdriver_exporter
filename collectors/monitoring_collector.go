@@ -168,6 +168,9 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 						errChannel <- err
 						break
 					}
+					if page == nil {
+						break
+					}
 					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch); err != nil {
 						errChannel <- err
 						break
