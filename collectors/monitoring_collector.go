@@ -171,6 +171,11 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					if page == nil {
 						break
 					}
+					select {
+					case <-errChannel:
+						break
+					default:
+					}
 					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch); err != nil {
 						errChannel <- err
 						break
