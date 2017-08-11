@@ -145,8 +145,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 
 		c.apiCallsTotalMetric.Inc()
 
-		doneChannel := make(chan bool, 1)
-		errChannel := make(chan error, 1)
+		errChannel := make(chan error, len(page.MetricDescriptors))
 
 		startTime := time.Now().UTC().Add(c.metricsInterval * -1)
 		endTime := time.Now().UTC()
@@ -182,25 +181,15 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				}
 			}(metricDescriptor, ch)
 		}
+		wg.Wait()
+		close(errChannel)
 
-		go func() {
-			wg.Wait()
-			close(doneChannel)
-		}()
-
-		select {
-		case <-doneChannel:
-		case err := <-errChannel:
-			return err
-		}
-
-		return nil
+		return <-errChannel
 	}
 
 	var wg = &sync.WaitGroup{}
 
-	doneChannel := make(chan bool, 1)
-	errChannel := make(chan error, 1)
+	errChannel := make(chan error, len(c.metricsTypePrefixes))
 
 	for _, metricsTypePrefix := range c.metricsTypePrefixes {
 		wg.Add(1)
@@ -216,18 +205,10 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 		}(metricsTypePrefix)
 	}
 
-	go func() {
-		wg.Wait()
-		close(doneChannel)
-	}()
+	wg.Wait()
+	close(errChannel)
 
-	select {
-	case <-doneChannel:
-	case err := <-errChannel:
-		return err
-	}
-
-	return nil
+	return <-errChannel
 }
 
 func (c *MonitoringCollector) reportTimeSeriesMetrics(page *monitoring.ListTimeSeriesResponse, metricDescriptor *monitoring.MetricDescriptor, ch chan<- prometheus.Metric) error {
