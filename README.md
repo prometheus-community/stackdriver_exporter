@@ -1,6 +1,6 @@
 # Google Stackdriver Prometheus Exporter [![Build Status](https://travis-ci.org/frodenas/stackdriver_exporter.png)](https://travis-ci.org/frodenas/stackdriver_exporter)
 
-A [Prometheus][prometheus] exporter for [Google Stackdriver Monitoring][stackdriver] metrics.
+A [Prometheus][prometheus] exporter for [Google Stackdriver Monitoring][stackdriver] metrics. It acts as a proxy that requests Stackdriver API everytime prometheus scrapes it.
 
 ## Installation
 
@@ -67,6 +67,8 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 | `monitoring.metrics-interval`<br />`STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL` | No | `5m` | Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used |
 | `web.listen-address`<br />`STACKDRIVER_EXPORTER_WEB_LISTEN_ADDRESS` | No | `:9255` | Address to listen on for web interface and telemetry |
 | `web.telemetry-path`<br />`STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH` | No | `/metrics` | Path under which to expose Prometheus metrics |
+
+__NOTE:__ monitoring.metrics-interval is not the scape interval; it specifies the metric's timestamp interval to send in the request to the Stackdriver API.
 
 ### Metrics
 
