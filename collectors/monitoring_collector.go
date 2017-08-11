@@ -1,7 +1,6 @@
 package collectors
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -164,6 +163,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					c.apiCallsTotalMetric.Inc()
 					page, err := timeSeriesListCall.Do()
 					if err != nil {
+						log.Errorf("Error retrieving Time Series metrics for descriptor `%s`: %v", metricDescriptor.Type, err)
 						errChannel <- err
 						break
 					}
@@ -171,6 +171,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 						break
 					}
 					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch); err != nil {
+						log.Errorf("Error reporting Time Series metrics for descriptor `%s`: %v", metricDescriptor.Type, err)
 						errChannel <- err
 						break
 					}
@@ -181,6 +182,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				}
 			}(metricDescriptor, ch)
 		}
+
 		wg.Wait()
 		close(errChannel)
 
@@ -221,7 +223,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(page *monitoring.ListTimeS
 		for _, point := range timeSeries.Points {
 			endTime, err := time.Parse(time.RFC3339Nano, point.Interval.EndTime)
 			if err != nil {
-				return errors.New(fmt.Sprintf("Error parsing TimeSeries Point interval end time `%s`: %s", point.Interval.EndTime, err))
+				return fmt.Errorf("Error parsing TimeSeries Point interval end time `%s`: %s", point.Interval.EndTime, err)
 			}
 			if endTime.After(newestEndTime) {
 				newestEndTime = endTime
