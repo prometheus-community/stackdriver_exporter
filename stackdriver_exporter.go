@@ -31,7 +31,7 @@ var (
 	)
 
 	monitoringMetricsInterval = flag.Duration(
-		"monitoring.metrics-interval", 60*time.Second,
+		"monitoring.metrics-interval", 5*time.Minute,
 		"Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used ($STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL).",
 	)
 
