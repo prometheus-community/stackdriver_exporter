@@ -26,7 +26,12 @@ type MonitoringCollector struct {
 	lastScrapeDurationSecondsMetric prometheus.Gauge
 }
 
-func NewMonitoringCollector(projectID string, metricsTypePrefixes []string, metricsInterval time.Duration, monitoringService *monitoring.Service) (*MonitoringCollector, error) {
+func NewMonitoringCollector(
+	projectID string,
+	metricsTypePrefixes []string,
+	metricsInterval time.Duration,
+	monitoringService *monitoring.Service,
+) (*MonitoringCollector, error) {
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace:   "stackdriver",
@@ -213,7 +218,11 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 	return <-errChannel
 }
 
-func (c *MonitoringCollector) reportTimeSeriesMetrics(page *monitoring.ListTimeSeriesResponse, metricDescriptor *monitoring.MetricDescriptor, ch chan<- prometheus.Metric) error {
+func (c *MonitoringCollector) reportTimeSeriesMetrics(
+	page *monitoring.ListTimeSeriesResponse,
+	metricDescriptor *monitoring.MetricDescriptor,
+	ch chan<- prometheus.Metric,
+) error {
 	var metricValue float64
 	var metricValueType prometheus.ValueType
 	var newestTSPoint *monitoring.Point
