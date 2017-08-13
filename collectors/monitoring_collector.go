@@ -266,20 +266,30 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			continue
 		}
 
-		labelKeys := []string{"unit", "resource_type"}
-		labelValues := []string{metricDescriptor.Unit, timeSeries.Resource.Type}
+		labelKeys := []string{"unit"}
+		labelValues := []string{metricDescriptor.Unit}
+
+		// Add the metric labels
+		// @see https://cloud.google.com/monitoring/api/metrics
 		for key, value := range timeSeries.Metric.Labels {
 			labelKeys = append(labelKeys, key)
 			labelValues = append(labelValues, value)
 		}
+
+		// Add the monitored resource labels
+		// @see https://cloud.google.com/monitoring/api/resources
 		for key, value := range timeSeries.Resource.Labels {
 			labelKeys = append(labelKeys, key)
 			labelValues = append(labelValues, value)
 		}
 
+		// The metric name to report is composed by the 3 parts:
+		// 1. namespace is a constant prefix (stackdriver)
+		// 2. subsystem is the monitored resource type (ie gce_instance)
+		// 3. name is the metric type (ie compute.googleapis.com/instance/cpu/usage_time)
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("stackdriver", "monitoring", utils.NormalizeMetricName(timeSeries.Metric.Type)),
+				prometheus.BuildFQName("stackdriver", utils.NormalizeMetricName(timeSeries.Resource.Type), utils.NormalizeMetricName(timeSeries.Metric.Type)),
 				metricDescriptor.Description,
 				labelKeys,
 				prometheus.Labels{},
