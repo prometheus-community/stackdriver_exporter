@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -86,12 +85,12 @@ func createMonitoringService() (*monitoring.Service, error) {
 
 	googleClient, err := google.DefaultClient(ctx, monitoring.MonitoringReadScope)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error creating Google client: %v", err))
+		return nil, fmt.Errorf("Error creating Google client: %v", err)
 	}
 
 	monitoringService, err := monitoring.New(googleClient)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error creating Google Stackdriver Monitoring service: %v", err))
+		return nil, fmt.Errorf("Error creating Google Stackdriver Monitoring service: %v", err)
 	}
 
 	return monitoringService, nil
