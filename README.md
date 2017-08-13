@@ -82,7 +82,14 @@ The exporter returns the following metrics:
 | `stackdriver_monitoring_last_scrape_duration_seconds` | Duration of the last metrics scrape from Google Stackdriver Monitoring | `project_id` |
 
 Metrics gathered from Google Stackdriver Monitoring are converted to Prometheus metrics:
-* Metrics names are normalized using Prometheus [specification][metrics-name].
+* Metric's names are normalized according to the Prometheus [specification][metrics-name] using the following pattern:
+  1. `namespace` is a constant prefix (`stackdriver`)
+  2. `subsystem` is the normalized monitored resource type (ie `gce_instance`)
+  3. `name` is the normalized metric type (ie `compute_googleapis_com_instance_cpu_usage_time`)
+* Labels attached to each metric are an aggregation of:
+  1. the `unit` in which the metric value is reported
+  3. the metric type labels (see [Metrics List][metrics-list])
+  4. the monitored resource labels (see [Monitored Resource Types][monitored-resources])
 * For each timeseries, only the most recent data point is exported.
 * Stackdriver `GAUGE` metric kinds are reported as Prometheus `Gauge` metrics; Stackdriver `DELTA` and `CUMULATIVE` metric kinds are reported as Prometheus `Counter` metrics.
 * Only `BOOL`, `INT64` and `DOUBLE` metric types are supported, other types (`STRING`, `DISTRIBUTION` and `MONEY`) are discarded.
@@ -118,6 +125,7 @@ Apache License 2.0, see [LICENSE][license].
 [metrics-prefix-example]: https://github.com/frodenas/stackdriver_exporter#example
 [metrics-list]: https://cloud.google.com/monitoring/api/metrics
 [metrics-name]: https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
+[monitored-resources]: https://cloud.google.com/monitoring/api/resources
 [prometheus]: https://prometheus.io/
 [prometheus-boshrelease]: https://github.com/cloudfoundry-community/prometheus-boshrelease
 [stackdriver]: https://cloud.google.com/monitoring/
