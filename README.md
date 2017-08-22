@@ -92,7 +92,8 @@ Metrics gathered from Google Stackdriver Monitoring are converted to Prometheus 
   4. the monitored resource labels (see [Monitored Resource Types][monitored-resources])
 * For each timeseries, only the most recent data point is exported.
 * Stackdriver `GAUGE` metric kinds are reported as Prometheus `Gauge` metrics; Stackdriver `DELTA` and `CUMULATIVE` metric kinds are reported as Prometheus `Counter` metrics.
-* Only `BOOL`, `INT64` and `DOUBLE` metric types are supported, other types (`STRING`, `DISTRIBUTION` and `MONEY`) are discarded.
+* Only `BOOL`, `INT64`, `DOUBLE` and `DISTRIBUTION` metric types are supported, other types (`STRING` and `MONEY`) are discarded.
+* `DISTRIBUTION` metric type is reported as a Prometheus `Histogram`, except the `_sum` time series is not supported.
 
 ### Example
 
