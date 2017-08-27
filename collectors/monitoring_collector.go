@@ -1,7 +1,9 @@
 package collectors
 
 import (
+	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -226,6 +228,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	var metricValue float64
 	var metricValueType prometheus.ValueType
 	var newestTSPoint *monitoring.Point
+	var metricDesc *prometheus.Desc
 
 	for _, timeSeries := range page.TimeSeries {
 		newestEndTime := time.Unix(0, 0)
@@ -238,32 +241,6 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 				newestEndTime = endTime
 				newestTSPoint = point
 			}
-		}
-
-		switch timeSeries.MetricKind {
-		case "GAUGE":
-			metricValueType = prometheus.GaugeValue
-		case "DELTA":
-			metricValueType = prometheus.CounterValue
-		case "CUMULATIVE":
-			metricValueType = prometheus.CounterValue
-		default:
-			continue
-		}
-
-		switch timeSeries.ValueType {
-		case "BOOL":
-			metricValue = 0
-			if *newestTSPoint.Value.BoolValue {
-				metricValue = 1
-			}
-		case "INT64":
-			metricValue = float64(*newestTSPoint.Value.Int64Value)
-		case "DOUBLE":
-			metricValue = *newestTSPoint.Value.DoubleValue
-		default:
-			log.Debugf("Discarding `%s` metric: %+v", timeSeries.ValueType, timeSeries)
-			continue
 		}
 
 		labelKeys := []string{"unit"}
@@ -287,13 +264,56 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 		// 1. namespace is a constant prefix (stackdriver)
 		// 2. subsystem is the monitored resource type (ie gce_instance)
 		// 3. name is the metric type (ie compute.googleapis.com/instance/cpu/usage_time)
+		metricDesc = prometheus.NewDesc(
+			prometheus.BuildFQName("stackdriver", utils.NormalizeMetricName(timeSeries.Resource.Type), utils.NormalizeMetricName(timeSeries.Metric.Type)),
+			metricDescriptor.Description,
+			labelKeys,
+			prometheus.Labels{},
+		)
+
+		switch timeSeries.MetricKind {
+		case "GAUGE":
+			metricValueType = prometheus.GaugeValue
+		case "DELTA":
+			metricValueType = prometheus.CounterValue
+		case "CUMULATIVE":
+			metricValueType = prometheus.CounterValue
+		default:
+			continue
+		}
+
+		switch timeSeries.ValueType {
+		case "BOOL":
+			metricValue = 0
+			if *newestTSPoint.Value.BoolValue {
+				metricValue = 1
+			}
+		case "INT64":
+			metricValue = float64(*newestTSPoint.Value.Int64Value)
+		case "DOUBLE":
+			metricValue = *newestTSPoint.Value.DoubleValue
+		case "DISTRIBUTION":
+			dist := newestTSPoint.Value.DistributionValue
+			buckets, err := c.generateHistogramBuckets(dist)
+			if err == nil {
+				ch <- prometheus.MustNewConstHistogram(
+					metricDesc,
+					uint64(dist.Count),
+					0, // Stackdriver does not provide the sum
+					buckets,
+					labelValues...,
+				)
+			} else {
+				log.Debugf("Discarding resource %s metric %s: %s", timeSeries.Resource.Type, timeSeries.Metric.Type, err)
+			}
+			continue
+		default:
+			log.Debugf("Discarding `%s` metric: %+v", timeSeries.ValueType, timeSeries)
+			continue
+		}
+
 		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("stackdriver", utils.NormalizeMetricName(timeSeries.Resource.Type), utils.NormalizeMetricName(timeSeries.Metric.Type)),
-				metricDescriptor.Description,
-				labelKeys,
-				prometheus.Labels{},
-			),
+			metricDesc,
 			metricValueType,
 			metricValue,
 			labelValues...,
@@ -301,4 +321,57 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	}
 
 	return nil
+}
+
+func (c *MonitoringCollector) generateHistogramBuckets(
+	dist *monitoring.Distribution,
+) (map[float64]uint64, error) {
+	opts := dist.BucketOptions
+	var bucketKeys []float64
+	switch {
+	case opts.ExplicitBuckets != nil:
+		// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TypedValue#explicit
+		bucketKeys = make([]float64, len(opts.ExplicitBuckets.Bounds)+1)
+		for i, b := range opts.ExplicitBuckets.Bounds {
+			bucketKeys[i] = b
+		}
+	case opts.LinearBuckets != nil:
+		// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TypedValue#linear
+		// NumFiniteBuckets is inclusive so bucket count is num+2
+		num := int(opts.LinearBuckets.NumFiniteBuckets)
+		bucketKeys = make([]float64, num+2)
+		for i := 0; i <= num; i++ {
+			bucketKeys[i] = opts.LinearBuckets.Offset + (float64(i) * opts.LinearBuckets.Width)
+		}
+	case opts.ExponentialBuckets != nil:
+		// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TypedValue#exponential
+		// NumFiniteBuckets is inclusive so bucket count is num+2
+		num := int(opts.ExponentialBuckets.NumFiniteBuckets)
+		bucketKeys = make([]float64, num+2)
+		for i := 0; i <= num; i++ {
+			bucketKeys[i] = opts.ExponentialBuckets.Scale * math.Pow(opts.ExponentialBuckets.GrowthFactor, float64(i))
+		}
+	default:
+		return nil, errors.New("Unknown distribution buckets")
+	}
+	// The last bucket is always infinity
+	// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TypedValue#bucketoptions
+	bucketKeys[len(bucketKeys)-1] = math.Inf(1)
+
+	// Prometheus expects each bucket to have a lower bound of 0, but Google
+	// sends a bucket with a lower bound of the previous bucket's upper bound, so
+	// we need to store the last bucket and add it to the next bucket to make it
+	// 0-bound.
+	// Any remaining keys without data have a value of 0
+	buckets := map[float64]uint64{}
+	var last uint64
+	for i, b := range bucketKeys {
+		if len(dist.BucketCounts) > i {
+			buckets[b] = uint64(dist.BucketCounts[i]) + last
+			last = buckets[b]
+		} else {
+			buckets[b] = last
+		}
+	}
+	return buckets, nil
 }
