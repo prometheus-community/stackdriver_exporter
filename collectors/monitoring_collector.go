@@ -19,6 +19,7 @@ type MonitoringCollector struct {
 	projectID                       string
 	metricsTypePrefixes             []string
 	metricsInterval                 time.Duration
+	metricsOffset                   time.Duration
 	monitoringService               *monitoring.Service
 	apiCallsTotalMetric             prometheus.Counter
 	scrapesTotalMetric              prometheus.Counter
@@ -32,6 +33,7 @@ func NewMonitoringCollector(
 	projectID string,
 	metricsTypePrefixes []string,
 	metricsInterval time.Duration,
+	metricsOffset time.Duration,
 	monitoringService *monitoring.Service,
 ) (*MonitoringCollector, error) {
 	apiCallsTotalMetric := prometheus.NewCounter(
@@ -98,6 +100,7 @@ func NewMonitoringCollector(
 		projectID:                       projectID,
 		metricsTypePrefixes:             metricsTypePrefixes,
 		metricsInterval:                 metricsInterval,
+		metricsOffset:                   metricsOffset,
 		monitoringService:               monitoringService,
 		apiCallsTotalMetric:             apiCallsTotalMetric,
 		scrapesTotalMetric:              scrapesTotalMetric,
@@ -153,8 +156,8 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 
 		errChannel := make(chan error, len(page.MetricDescriptors))
 
-		startTime := time.Now().UTC().Add(c.metricsInterval * -1)
-		endTime := time.Now().UTC()
+		startTime := time.Now().UTC().Add(c.metricsInterval * -1).Add(c.metricsOffset * -1)
+		endTime := time.Now().UTC().Add(c.metricsOffset * -1)
 
 		for _, metricDescriptor := range page.MetricDescriptors {
 			wg.Add(1)

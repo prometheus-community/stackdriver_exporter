@@ -34,6 +34,11 @@ var (
 		"Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used ($STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL).",
 	)
 
+	monitoringMetricsOffset = flag.Duration(
+		"monitoring.metrics-offset", 0*time.Second,
+		"Offset for the Google Stackdriver Monitoring Metrics interval into the past ($STACKDRIVER_EXPORTER_MONITORING_METRICS_OFFSET).",
+	)
+
 	listenAddress = flag.String(
 		"web.listen-address", ":9255",
 		"Address to listen on for web interface and telemetry ($STACKDRIVER_EXPORTER_WEB_LISTEN_ADDRESS).",
@@ -58,6 +63,7 @@ func overrideFlagsWithEnvVars() {
 	overrideWithEnvVar("STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID", projectID)
 	overrideWithEnvVar("STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES", monitoringMetricsTypePrefixes)
 	overrideWithEnvDuration("STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL", monitoringMetricsInterval)
+	overrideWithEnvDuration("STACKDRIVER_EXPORTER_MONITORING_METRICS_OFFSET", monitoringMetricsOffset)
 	overrideWithEnvVar("STACKDRIVER_EXPORTER_WEB_LISTEN_ADDRESS", listenAddress)
 	overrideWithEnvVar("STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH", metricsPath)
 }
@@ -125,7 +131,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	monitoringCollector, err := collectors.NewMonitoringCollector(*projectID, metricsTypePrefixes, *monitoringMetricsInterval, monitoringService)
+	monitoringCollector, err := collectors.NewMonitoringCollector(*projectID, metricsTypePrefixes, *monitoringMetricsInterval, *monitoringMetricsOffset, monitoringService)
 	if err != nil {
 		log.Error(err)
 		os.Exit(1)
