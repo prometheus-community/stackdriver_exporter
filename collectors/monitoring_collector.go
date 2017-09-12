@@ -278,7 +278,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 		case "GAUGE":
 			metricValueType = prometheus.GaugeValue
 		case "DELTA":
-			metricValueType = prometheus.CounterValue
+			metricValueType = prometheus.GaugeValue
 		case "CUMULATIVE":
 			metricValueType = prometheus.CounterValue
 		default:
