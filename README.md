@@ -102,8 +102,8 @@ If we want to get all `CPU` (`compute.googleapis.com/instance/cpu`) and `Disk` (
 
 ```
 stackdriver_exporter \
-  -google.project-id my-test-project \
-  -monitoring.metrics-type-prefixes "compute.googleapis.com/instance/cpu,compute.googleapis.com/instance/disk"
+  --google.project-id my-test-project \
+  --monitoring.metrics-type-prefixes "compute.googleapis.com/instance/cpu,compute.googleapis.com/instance/disk"
 ```
 
 ## Contributing

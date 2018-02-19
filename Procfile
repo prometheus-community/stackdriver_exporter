@@ -1,1 +1,1 @@
-web: stackdriver_exporter -web.listen-address=":$PORT"
+web: stackdriver_exporter --web.listen-address=":$PORT"

@@ -1,12 +1,10 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
@@ -14,76 +12,39 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/monitoring/v3"
+	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/frodenas/stackdriver_exporter/collectors"
 )
 
 var (
-	projectID = flag.String(
-		"google.project-id", "",
-		"Google Project ID ($STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID).",
-	)
+	projectID = kingpin.Flag(
+		"google.project-id", "Google Project ID ($STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID).",
+	).Envar("STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID").Required().String()
 
-	monitoringMetricsTypePrefixes = flag.String(
-		"monitoring.metrics-type-prefixes", "",
-		"Comma separated Google Stackdriver Monitoring Metric Type prefixes ($STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES).",
-	)
+	monitoringMetricsTypePrefixes = kingpin.Flag(
+		"monitoring.metrics-type-prefixes", "Comma separated Google Stackdriver Monitoring Metric Type prefixes ($STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES).",
+	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES").Required().String()
 
-	monitoringMetricsInterval = flag.Duration(
-		"monitoring.metrics-interval", 5*time.Minute,
-		"Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used ($STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL).",
-	)
+	monitoringMetricsInterval = kingpin.Flag(
+		"monitoring.metrics-interval", "Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used ($STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL).",
+	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL").Default("5m").Duration()
 
-	monitoringMetricsOffset = flag.Duration(
-		"monitoring.metrics-offset", 0*time.Second,
-		"Offset for the Google Stackdriver Monitoring Metrics interval into the past ($STACKDRIVER_EXPORTER_MONITORING_METRICS_OFFSET).",
-	)
+	monitoringMetricsOffset = kingpin.Flag(
+		"monitoring.metrics-offset", "Offset for the Google Stackdriver Monitoring Metrics interval into the past ($STACKDRIVER_EXPORTER_MONITORING_METRICS_OFFSET).",
+	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_OFFSET").Default("0s").Duration()
 
-	listenAddress = flag.String(
-		"web.listen-address", ":9255",
-		"Address to listen on for web interface and telemetry ($STACKDRIVER_EXPORTER_WEB_LISTEN_ADDRESS).",
-	)
+	listenAddress = kingpin.Flag(
+		"web.listen-address", "Address to listen on for web interface and telemetry ($STACKDRIVER_EXPORTER_WEB_LISTEN_ADDRESS).",
+	).Envar("STACKDRIVER_EXPORTER_WEB_LISTEN_ADDRESS").Default(":9255").String()
 
-	metricsPath = flag.String(
-		"web.telemetry-path", "/metrics",
-		"Path under which to expose Prometheus metrics ($STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH)).",
-	)
-
-	showVersion = flag.Bool(
-		"version", false,
-		"Print version information.",
-	)
+	metricsPath = kingpin.Flag(
+		"web.telemetry-path", "Path under which to expose Prometheus metrics ($STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH).",
+	).Envar("STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH").Default("/metrics").String()
 )
 
 func init() {
 	prometheus.MustRegister(version.NewCollector("stackdriver_exporter"))
-}
-
-func overrideFlagsWithEnvVars() {
-	overrideWithEnvVar("STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID", projectID)
-	overrideWithEnvVar("STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES", monitoringMetricsTypePrefixes)
-	overrideWithEnvDuration("STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL", monitoringMetricsInterval)
-	overrideWithEnvDuration("STACKDRIVER_EXPORTER_MONITORING_METRICS_OFFSET", monitoringMetricsOffset)
-	overrideWithEnvVar("STACKDRIVER_EXPORTER_WEB_LISTEN_ADDRESS", listenAddress)
-	overrideWithEnvVar("STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH", metricsPath)
-}
-
-func overrideWithEnvVar(name string, value *string) {
-	envValue := os.Getenv(name)
-	if envValue != "" {
-		*value = envValue
-	}
-}
-
-func overrideWithEnvDuration(name string, value *time.Duration) {
-	envValue := os.Getenv(name)
-	if envValue != "" {
-		var err error
-		*value, err = time.ParseDuration(envValue)
-		if err != nil {
-			log.Fatalf("Invalid `%s`: %s", name, err)
-		}
-	}
 }
 
 func createMonitoringService() (*monitoring.Service, error) {
@@ -103,13 +64,10 @@ func createMonitoringService() (*monitoring.Service, error) {
 }
 
 func main() {
-	flag.Parse()
-	overrideFlagsWithEnvVars()
-
-	if *showVersion {
-		fmt.Fprintln(os.Stdout, version.Print("stackdriver_exporter"))
-		os.Exit(0)
-	}
+	log.AddFlags(kingpin.CommandLine)
+	kingpin.Version(version.Print("stackdriver_exporter"))
+	kingpin.HelpFlag.Short('h')
+	kingpin.Parse()
 
 	if *projectID == "" {
 		log.Error("Flag `google.project-id` is required")
