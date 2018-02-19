@@ -5,10 +5,10 @@
 // +build windows
 
 // Package windows contains an interface to the low-level operating system
-// primitives.  OS details vary depending on the underlying system, and
+// primitives. OS details vary depending on the underlying system, and
 // by default, godoc will display the OS-specific documentation for the current
-// system.  If you want godoc to display syscall documentation for another
-// system, set $GOOS and $GOARCH to the desired system.  For example, if
+// system. If you want godoc to display syscall documentation for another
+// system, set $GOOS and $GOARCH to the desired system. For example, if
 // you want to view documentation for freebsd/arm on linux/amd64, set $GOOS
 // to freebsd and $GOARCH to arm.
 // The primary use of this package is inside other packages that provide a more
@@ -23,7 +23,6 @@ package windows // import "golang.org/x/sys/windows"
 
 import (
 	"syscall"
-	"unsafe"
 )
 
 // ByteSliceFromString returns a NUL-terminated slice of bytes
@@ -70,8 +69,3 @@ func (ts *Timespec) Nano() int64 {
 func (tv *Timeval) Nano() int64 {
 	return int64(tv.Sec)*1e9 + int64(tv.Usec)*1000
 }
-
-// use is a no-op, but the compiler cannot see that it is.
-// Calling use(p) ensures that p is kept live until that point.
-//go:noescape
-func use(p unsafe.Pointer)

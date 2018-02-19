@@ -2,29 +2,49 @@
 
 
 [[projects]]
-  name = "github.com/Sirupsen/logrus"
-  packages = ["."]
-  revision = "61e43dc76f7ee59a82bdf3d71033dc12bea4c77d"
+  name = "cloud.google.com/go"
+  packages = ["compute/metadata"]
+  revision = "767c40d6a2e058483c25fa193e963a22da17236d"
+  version = "v0.18.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/alecthomas/template"
+  packages = [
+    ".",
+    "parse"
+  ]
+  revision = "a0175ee3bccc567396460bf5acd36800cb10c49c"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/alecthomas/units"
+  packages = ["."]
+  revision = "2efee857e7cfd4f3d0138cc3cbb1b4966962b93a"
+
+[[projects]]
+  branch = "master"
   name = "github.com/beorn7/perks"
   packages = ["quantile"]
-  revision = "b965b613227fddccbfffe13eae360ed3fa822f8d"
+  revision = "4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9"
 
 [[projects]]
+  branch = "master"
   name = "github.com/fatih/camelcase"
   packages = ["."]
-  revision = "f6a740d52f961c60348ebb109adde9f4635d7540"
+  revision = "44e46d280b43ec1531bb25252440e34f1b800b65"
 
 [[projects]]
   name = "github.com/golang/protobuf"
   packages = ["proto"]
-  revision = "b982704f8bb716bb608144408cff30e15fbde841"
+  revision = "925541529c1fa6821df4e44ce2723319eb2be768"
+  version = "v1.0.0"
 
 [[projects]]
   name = "github.com/matttproud/golang_protobuf_extensions"
   packages = ["pbutil"]
-  revision = "fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a"
+  revision = "3247c84500bff8d9fb6d579d800f20b3e091582c"
+  version = "v1.0.0"
 
 [[projects]]
   name = "github.com/onsi/ginkgo"
@@ -48,7 +68,8 @@
     "reporters/stenographer/support/go-isatty",
     "types"
   ]
-  revision = "a1f616c97771e46da1722d3aa9dcde0a43f55682"
+  revision = "9eda700730cba42af70d53180f9dcce9266bc2bc"
+  version = "v1.4.0"
 
 [[projects]]
   name = "github.com/onsi/gomega"
@@ -66,19 +87,23 @@
     "matchers/support/goraph/util",
     "types"
   ]
-  revision = "39a54bd3c3bbfe1c331a9b3207e92134c77ed812"
+  revision = "003f63b7f4cff3fc95357005358af2de0f5fe152"
+  version = "v1.3.0"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
   packages = ["prometheus"]
-  revision = "42552c195dd3f3089fbf9cf26e139da150af35aa"
+  revision = "c5b7fccd204277076155f10851dad72b76a49317"
+  version = "v0.8.0"
 
 [[projects]]
+  branch = "master"
   name = "github.com/prometheus/client_model"
   packages = ["go"]
-  revision = "6f3806018612930941127f2a7c6c453ba2c527d2"
+  revision = "99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c"
 
 [[projects]]
+  branch = "master"
   name = "github.com/prometheus/common"
   packages = [
     "expfmt",
@@ -87,14 +112,33 @@
     "model",
     "version"
   ]
-  revision = "13ba4ddd0caa9c28ca7b7bffe1dfa9ed8d5ef207"
+  revision = "89604d197083d4781071d3c65855d24ecfb0a563"
 
 [[projects]]
+  branch = "master"
   name = "github.com/prometheus/procfs"
-  packages = ["."]
-  revision = "490cc6eb5fa45bf8a8b7b73c8bc82a8160e8531d"
+  packages = [
+    ".",
+    "internal/util",
+    "nfs",
+    "xfs"
+  ]
+  revision = "282c8707aa210456a825798969cc27edda34992a"
 
 [[projects]]
+  name = "github.com/sirupsen/logrus"
+  packages = ["."]
+  revision = "d682213848ed68c0a260ca37d6dd5ace8423f5ba"
+  version = "v1.0.4"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/crypto"
+  packages = ["ssh/terminal"]
+  revision = "650f4a345ab4e5b245a3034b110ebc7299e68186"
+
+[[projects]]
+  branch = "master"
   name = "golang.org/x/net"
   packages = [
     "context",
@@ -103,9 +147,10 @@
     "html/atom",
     "html/charset"
   ]
-  revision = "db8e4de5b2d6653f66aea53094624468caad15d2"
+  revision = "cbe0f9307d0156177f9dd5dc85da1a31abc5f2fb"
 
 [[projects]]
+  branch = "master"
   name = "golang.org/x/oauth2"
   packages = [
     ".",
@@ -114,9 +159,10 @@
     "jws",
     "jwt"
   ]
-  revision = "b5adcc2dcdf009d0391547edc6ecbaff889f5bb9"
+  revision = "543e37812f10c46c622c9575afd7ad22f22a12ba"
 
 [[projects]]
+  branch = "master"
   name = "golang.org/x/sys"
   packages = [
     "unix",
@@ -124,13 +170,15 @@
     "windows/registry",
     "windows/svc/eventlog"
   ]
-  revision = "442cd600860ce722f6615730eb008a37a87b13ee"
+  revision = "37707fdb30a5b38865cfb95e5aab41707daec7fd"
 
 [[projects]]
+  branch = "master"
   name = "golang.org/x/text"
   packages = [
     "encoding",
     "encoding/charmap",
+    "encoding/htmlindex",
     "encoding/internal",
     "encoding/internal/identifier",
     "encoding/japanese",
@@ -139,14 +187,17 @@
     "encoding/traditionalchinese",
     "encoding/unicode",
     "internal/gen",
+    "internal/tag",
     "internal/utf8internal",
+    "language",
     "runes",
     "transform",
     "unicode/cldr"
   ]
-  revision = "19e51611da83d6be54ddafce4a4af510cb3e9ea4"
+  revision = "4e4a3210bb54bb31f6ab2cdca2edcc0b50c420c1"
 
 [[projects]]
+  branch = "master"
   name = "google.golang.org/api"
   packages = [
     "gensupport",
@@ -154,7 +205,7 @@
     "googleapi/internal/uritemplates",
     "monitoring/v3"
   ]
-  revision = "0209b31435ad4749b84ce122e669fb098f556642"
+  revision = "c76a25da6c114df45a86acb8873ae83eda1430b9"
 
 [[projects]]
   name = "google.golang.org/appengine"
@@ -174,17 +225,16 @@
   version = "v1.0.0"
 
 [[projects]]
-  name = "google.golang.org/cloud"
-  packages = [
-    "compute/metadata",
-    "internal"
-  ]
-  revision = "eb47ba841d53d93506cfbfbc03927daf9cc48f88"
+  name = "gopkg.in/alecthomas/kingpin.v2"
+  packages = ["."]
+  revision = "947dcec5ba9c011838740e680966fd7087a71d0d"
+  version = "v2.2.6"
 
 [[projects]]
+  branch = "v2"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
-  revision = "49c95bdc21843256fb6c4e0d370a05f24a0bf213"
+  revision = "d670f9405373e636a5a2765eea47fac0c9bc91a4"
 
 [solve-meta]
   analyzer-name = "dep"
