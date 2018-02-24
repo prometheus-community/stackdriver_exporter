@@ -302,7 +302,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 				ch <- prometheus.MustNewConstHistogram(
 					metricDesc,
 					uint64(dist.Count),
-					0, // Stackdriver does not provide the sum
+					dist.Mean*float64(dist.Count), // Stackdriver does not provide the sum, but we can fake it
 					buckets,
 					labelValues...,
 				)
