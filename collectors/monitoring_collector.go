@@ -156,8 +156,8 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 
 		errChannel := make(chan error, len(page.MetricDescriptors))
 
-		startTime := time.Now().UTC().Add(c.metricsInterval * -1).Add(c.metricsOffset * -1)
 		endTime := time.Now().UTC().Add(c.metricsOffset * -1)
+		startTime := endTime.Add(c.metricsInterval * -1)
 
 		for _, metricDescriptor := range page.MetricDescriptors {
 			wg.Add(1)
