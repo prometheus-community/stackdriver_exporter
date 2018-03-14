@@ -13,6 +13,7 @@ import (
 	"google.golang.org/api/monitoring/v3"
 
 	"github.com/frodenas/stackdriver_exporter/utils"
+	"sort"
 )
 
 type MonitoringCollector struct {
@@ -231,8 +232,14 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	var metricValue float64
 	var metricValueType prometheus.ValueType
 	var newestTSPoint *monitoring.Point
-	var metricDesc *prometheus.Desc
 
+	timeSeriesMetrics := &TimeSeriesMetrics{
+		metricDescriptor:  metricDescriptor,
+		ch:                ch,
+		fillMissingLabels: true, //TODO: this can be configurable
+		constMetrics:      make(map[string][]ConstMetric),
+		histogramMetrics:  make(map[string][]HistogramMetric),
+	}
 	for _, timeSeries := range page.TimeSeries {
 		newestEndTime := time.Unix(0, 0)
 		for _, point := range timeSeries.Points {
@@ -245,7 +252,6 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 				newestTSPoint = point
 			}
 		}
-
 		labelKeys := []string{"unit"}
 		labelValues := []string{metricDescriptor.Unit}
 
@@ -262,17 +268,6 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			labelKeys = append(labelKeys, key)
 			labelValues = append(labelValues, value)
 		}
-
-		// The metric name to report is composed by the 3 parts:
-		// 1. namespace is a constant prefix (stackdriver)
-		// 2. subsystem is the monitored resource type (ie gce_instance)
-		// 3. name is the metric type (ie compute.googleapis.com/instance/cpu/usage_time)
-		metricDesc = prometheus.NewDesc(
-			prometheus.BuildFQName("stackdriver", utils.NormalizeMetricName(timeSeries.Resource.Type), utils.NormalizeMetricName(timeSeries.Metric.Type)),
-			metricDescriptor.Description,
-			labelKeys,
-			prometheus.Labels{},
-		)
 
 		switch timeSeries.MetricKind {
 		case "GAUGE":
@@ -299,13 +294,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			dist := newestTSPoint.Value.DistributionValue
 			buckets, err := c.generateHistogramBuckets(dist)
 			if err == nil {
-				ch <- prometheus.MustNewConstHistogram(
-					metricDesc,
-					uint64(dist.Count),
-					dist.Mean*float64(dist.Count), // Stackdriver does not provide the sum, but we can fake it
-					buckets,
-					labelValues...,
-				)
+				timeSeriesMetrics.CollectNewConstHistogram(timeSeries, labelKeys, dist, buckets, labelValues)
 			} else {
 				log.Debugf("Discarding resource %s metric %s: %s", timeSeries.Resource.Type, timeSeries.Metric.Type, err)
 			}
@@ -315,14 +304,9 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			continue
 		}
 
-		ch <- prometheus.MustNewConstMetric(
-			metricDesc,
-			metricValueType,
-			metricValue,
-			labelValues...,
-		)
+		timeSeriesMetrics.CollectNewConstMetric(timeSeries, labelKeys, metricValueType, metricValue, labelValues)
 	}
-
+	timeSeriesMetrics.Complete()
 	return nil
 }
 
@@ -377,4 +361,235 @@ func (c *MonitoringCollector) generateHistogramBuckets(
 		}
 	}
 	return buckets, nil
+}
+
+func buildFQName(timeSeries *monitoring.TimeSeries) string {
+	// The metric name to report is composed by the 3 parts:
+	// 1. namespace is a constant prefix (stackdriver)
+	// 2. subsystem is the monitored resource type (ie gce_instance)
+	// 3. name is the metric type (ie compute.googleapis.com/instance/cpu/usage_time)
+	return prometheus.BuildFQName("stackdriver", utils.NormalizeMetricName(timeSeries.Resource.Type), utils.NormalizeMetricName(timeSeries.Metric.Type))
+}
+
+type TimeSeriesMetrics struct {
+	metricDescriptor *monitoring.MetricDescriptor
+	ch               chan<- prometheus.Metric
+
+	fillMissingLabels bool
+	constMetrics      map[string][]ConstMetric
+	histogramMetrics  map[string][]HistogramMetric
+}
+
+func (t *TimeSeriesMetrics) NewMetricDesc(fqName string, labelKeys []string) *prometheus.Desc {
+	return prometheus.NewDesc(
+		fqName,
+		t.metricDescriptor.Description,
+		labelKeys,
+		prometheus.Labels{},
+	)
+}
+
+type ConstMetric struct {
+	fqName      string
+	labelKeys   []string
+	valueType   prometheus.ValueType
+	value       float64
+	labelValues []string
+
+	keysHash uint64
+}
+
+type HistogramMetric struct {
+	fqName      string
+	labelKeys   []string
+	dist        *monitoring.Distribution
+	buckets     map[float64]uint64
+	labelValues []string
+
+	keysHash uint64
+}
+
+func (t *TimeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.TimeSeries, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string) {
+	fqName := buildFQName(timeSeries)
+
+	if t.fillMissingLabels {
+		vs, ok := t.histogramMetrics[fqName]
+		if !ok {
+			vs = make([]HistogramMetric, 0)
+		}
+		v := HistogramMetric{
+			fqName:      fqName,
+			labelKeys:   labelKeys,
+			dist:        dist,
+			buckets:     buckets,
+			labelValues: labelValues,
+
+			keysHash: hashLabelKeys(labelKeys),
+		}
+		t.histogramMetrics[fqName] = append(vs, v)
+		return
+	}
+
+	metric := prometheus.MustNewConstHistogram(
+		t.NewMetricDesc(fqName, labelKeys),
+		uint64(dist.Count),
+		dist.Mean*float64(dist.Count), // Stackdriver does not provide the sum, but we can fake it
+		buckets,
+		labelValues...,
+	)
+	t.ch <- metric
+}
+
+func (t *TimeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSeries, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string) {
+	fqName := buildFQName(timeSeries)
+
+	if t.fillMissingLabels {
+		vs, ok := t.constMetrics[fqName]
+		if !ok {
+			vs = make([]ConstMetric, 0)
+		}
+		v := ConstMetric{
+			fqName:      fqName,
+			labelKeys:   labelKeys,
+			valueType:   metricValueType,
+			value:       metricValue,
+			labelValues: labelValues,
+
+			keysHash: hashLabelKeys(labelKeys),
+		}
+		t.constMetrics[fqName] = append(vs, v)
+		return
+	}
+
+	metric := prometheus.MustNewConstMetric(
+		t.NewMetricDesc(fqName, labelKeys),
+		metricValueType,
+		metricValue,
+		labelValues...,
+	)
+	t.ch <- metric
+}
+
+func hashLabelKeys(labelKeys []string) uint64 {
+	dh := hashNew()
+	sortedKeys := make([]string, len(labelKeys))
+	copy(sortedKeys, labelKeys)
+	sort.Strings(sortedKeys)
+	for _, key := range sortedKeys {
+		dh = hashAdd(dh, key)
+		dh = hashAddByte(dh, separatorByte)
+	}
+	return dh
+}
+
+func (t *TimeSeriesMetrics) Complete() {
+	t.CompleteConstMetrics()
+	t.CompleteHistogramMetrics()
+}
+
+func (t *TimeSeriesMetrics) CompleteConstMetrics() {
+	for _, vs := range t.constMetrics {
+		if len(vs) > 1 {
+			var needFill bool
+			for i := 1; i < len(vs); i++ {
+				if vs[0].keysHash != vs[i].keysHash {
+					needFill = true
+				}
+			}
+			if needFill {
+				vs = fillConstMetricsLabels(vs)
+			}
+		}
+
+		for _, v := range vs {
+			metric := prometheus.MustNewConstMetric(
+				t.NewMetricDesc(v.fqName, v.labelKeys),
+				v.valueType,
+				v.value,
+				v.labelValues...,
+			)
+			t.ch <- metric
+		}
+	}
+}
+
+func (t *TimeSeriesMetrics) CompleteHistogramMetrics() {
+	for _, vs := range t.histogramMetrics {
+		if len(vs) > 1 {
+			var needFill bool
+			for i := 1; i < len(vs); i++ {
+				if vs[0].keysHash != vs[i].keysHash {
+					needFill = true
+				}
+			}
+			if needFill {
+				vs = fillHistogramMetricsLabels(vs)
+			}
+		}
+
+		for _, v := range vs {
+			metric := prometheus.MustNewConstHistogram(
+				t.NewMetricDesc(v.fqName, v.labelKeys),
+				uint64(v.dist.Count),
+				v.dist.Mean*float64(v.dist.Count), // Stackdriver does not provide the sum, but we can fake it
+				v.buckets,
+				v.labelValues...,
+			)
+			t.ch <- metric
+		}
+	}
+}
+
+func fillConstMetricsLabels(metrics []ConstMetric) []ConstMetric {
+	allKeys := make(map[string]struct{})
+	for _, metric := range metrics {
+		for _, key := range metric.labelKeys {
+			allKeys[key] = struct{}{}
+		}
+	}
+	result := make([]ConstMetric, len(metrics))
+	for i, metric := range metrics {
+		if len(metric.labelKeys) != len(allKeys) {
+			metricKeys := make(map[string]struct{})
+			for _, key := range metric.labelKeys {
+				metricKeys[key] = struct{}{}
+			}
+			for key := range allKeys {
+				if _, ok := metricKeys[key]; !ok {
+					metric.labelKeys = append(metric.labelKeys, key)
+					metric.labelValues = append(metric.labelValues, "")
+				}
+			}
+		}
+		result[i] = metric
+	}
+
+	return result
+}
+
+func fillHistogramMetricsLabels(metrics []HistogramMetric) []HistogramMetric {
+	allKeys := make(map[string]struct{})
+	for _, metric := range metrics {
+		for _, key := range metric.labelKeys {
+			allKeys[key] = struct{}{}
+		}
+	}
+	result := make([]HistogramMetric, len(metrics))
+	for i, metric := range metrics {
+		if len(metric.labelKeys) != len(allKeys) {
+			metricKeys := make(map[string]struct{})
+			for _, key := range metric.labelKeys {
+				metricKeys[key] = struct{}{}
+			}
+			for key := range allKeys {
+				if _, ok := metricKeys[key]; !ok {
+					metric.labelKeys = append(metric.labelKeys, key)
+					metric.labelValues = append(metric.labelValues, "")
+				}
+			}
+		}
+		result[i] = metric
+	}
+
+	return result
 }
