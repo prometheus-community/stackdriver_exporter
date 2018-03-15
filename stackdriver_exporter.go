@@ -45,6 +45,10 @@ var (
 	cacheRefreshInterval = kingpin.Flag(
 		"caching.interval", "Interval at which to fetch all metrics, set to 0s for no caching",
 	).Envar("STACKDRIVER_EXPORTER_CACHE_REFRESH_INTERVAL").Default("0s").Duration()
+
+	collectorFillMissingLabels = kingpin.Flag(
+		"collector.fill-missing-labels", "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure ($STACKDRIVER_EXPORTER_COLLECTOR_FILL_MISSING_LABELS).",
+	).Envar("STACKDRIVER_EXPORTER_COLLECTOR_FILL_MISSING_LABELS").Default("false").Bool()
 )
 
 func init() {
@@ -94,7 +98,8 @@ func main() {
 	}
 
 	var monitoringCollector prometheus.Collector
-	monitoringCollector, err = collectors.NewMonitoringCollector(*projectID, metricsTypePrefixes, *monitoringMetricsInterval, *monitoringMetricsOffset, monitoringService)
+	monitoringCollector, err = collectors.NewMonitoringCollector(*projectID, metricsTypePrefixes, *monitoringMetricsInterval, *monitoringMetricsOffset, monitoringService, *collectorFillMissingLabels)
+
 	if err != nil {
 		log.Error(err)
 		os.Exit(1)
