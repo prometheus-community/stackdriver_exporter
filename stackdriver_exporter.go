@@ -41,6 +41,10 @@ var (
 	metricsPath = kingpin.Flag(
 		"web.telemetry-path", "Path under which to expose Prometheus metrics ($STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH).",
 	).Envar("STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH").Default("/metrics").String()
+
+	cacheRefreshInterval = kingpin.Flag(
+		"caching.interval", "Interval at which to fetch all metrics, set to 0s for no caching",
+	).Envar("STACKDRIVER_EXPORTER_CACHE_REFRESH_INTERVAL").Default("0s").Duration()
 )
 
 func init() {
@@ -89,11 +93,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	monitoringCollector, err := collectors.NewMonitoringCollector(*projectID, metricsTypePrefixes, *monitoringMetricsInterval, *monitoringMetricsOffset, monitoringService)
+	var monitoringCollector prometheus.Collector
+	monitoringCollector, err = collectors.NewMonitoringCollector(*projectID, metricsTypePrefixes, *monitoringMetricsInterval, *monitoringMetricsOffset, monitoringService)
 	if err != nil {
 		log.Error(err)
 		os.Exit(1)
 	}
+
+	if (cacheRefreshInterval.Seconds() > 0) {
+		monitoringCollector, err = collectors.NewCachingCollector(monitoringCollector, cacheRefreshInterval)
+		if err != nil {
+			log.Error(err)
+			os.Exit(1)
+		}
+	}
+
 	prometheus.MustRegister(monitoringCollector)
 
 	http.Handle(*metricsPath, prometheus.Handler())
