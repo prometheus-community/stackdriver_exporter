@@ -27,6 +27,7 @@ type MonitoringCollector struct {
 	lastScrapeErrorMetric           prometheus.Gauge
 	lastScrapeTimestampMetric       prometheus.Gauge
 	lastScrapeDurationSecondsMetric prometheus.Gauge
+	collectorFillMissingLabels      bool
 }
 
 func NewMonitoringCollector(
@@ -35,6 +36,7 @@ func NewMonitoringCollector(
 	metricsInterval time.Duration,
 	metricsOffset time.Duration,
 	monitoringService *monitoring.Service,
+	collectorFillMissingLabels bool,
 ) (*MonitoringCollector, error) {
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
@@ -108,6 +110,7 @@ func NewMonitoringCollector(
 		lastScrapeErrorMetric:           lastScrapeErrorMetric,
 		lastScrapeTimestampMetric:       lastScrapeTimestampMetric,
 		lastScrapeDurationSecondsMetric: lastScrapeDurationSecondsMetric,
+		collectorFillMissingLabels:      collectorFillMissingLabels,
 	}
 
 	return monitoringCollector, nil
@@ -231,8 +234,14 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	var metricValue float64
 	var metricValueType prometheus.ValueType
 	var newestTSPoint *monitoring.Point
-	var metricDesc *prometheus.Desc
 
+	timeSeriesMetrics := &TimeSeriesMetrics{
+		metricDescriptor:  metricDescriptor,
+		ch:                ch,
+		fillMissingLabels: c.collectorFillMissingLabels,
+		constMetrics:      make(map[string][]ConstMetric),
+		histogramMetrics:  make(map[string][]HistogramMetric),
+	}
 	for _, timeSeries := range page.TimeSeries {
 		newestEndTime := time.Unix(0, 0)
 		for _, point := range timeSeries.Points {
@@ -245,7 +254,6 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 				newestTSPoint = point
 			}
 		}
-
 		labelKeys := []string{"unit"}
 		labelValues := []string{metricDescriptor.Unit}
 
@@ -262,17 +270,6 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			labelKeys = append(labelKeys, key)
 			labelValues = append(labelValues, value)
 		}
-
-		// The metric name to report is composed by the 3 parts:
-		// 1. namespace is a constant prefix (stackdriver)
-		// 2. subsystem is the monitored resource type (ie gce_instance)
-		// 3. name is the metric type (ie compute.googleapis.com/instance/cpu/usage_time)
-		metricDesc = prometheus.NewDesc(
-			prometheus.BuildFQName("stackdriver", utils.NormalizeMetricName(timeSeries.Resource.Type), utils.NormalizeMetricName(timeSeries.Metric.Type)),
-			metricDescriptor.Description,
-			labelKeys,
-			prometheus.Labels{},
-		)
 
 		switch timeSeries.MetricKind {
 		case "GAUGE":
@@ -299,13 +296,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			dist := newestTSPoint.Value.DistributionValue
 			buckets, err := c.generateHistogramBuckets(dist)
 			if err == nil {
-				ch <- prometheus.MustNewConstHistogram(
-					metricDesc,
-					uint64(dist.Count),
-					dist.Mean*float64(dist.Count), // Stackdriver does not provide the sum, but we can fake it
-					buckets,
-					labelValues...,
-				)
+				timeSeriesMetrics.CollectNewConstHistogram(timeSeries, labelKeys, dist, buckets, labelValues)
 			} else {
 				log.Debugf("Discarding resource %s metric %s: %s", timeSeries.Resource.Type, timeSeries.Metric.Type, err)
 			}
@@ -315,14 +306,9 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			continue
 		}
 
-		ch <- prometheus.MustNewConstMetric(
-			metricDesc,
-			metricValueType,
-			metricValue,
-			labelValues...,
-		)
+		timeSeriesMetrics.CollectNewConstMetric(timeSeries, labelKeys, metricValueType, metricValue, labelValues)
 	}
-
+	timeSeriesMetrics.Complete()
 	return nil
 }
 
