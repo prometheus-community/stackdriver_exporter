@@ -40,7 +40,7 @@ podTemplate(label: label,
         }
         container('docker') {
             stage('Build container') {
-                imageName = "eu.gcr.io/cognitedata/frodenas/stackdriver_exporter:${gitCommit}"
+                imageName = "eu.gcr.io/cognitedata/frodenas/stackdriver-exporter:${gitCommit}"
                 sh("docker build -t ${imageName} .")
             }
             if (env.BRANCH_NAME == 'master') {
