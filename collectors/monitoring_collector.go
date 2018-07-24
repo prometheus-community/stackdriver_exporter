@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +21,10 @@ type MonitoringCollector struct {
 	metricsTypePrefixes             []string
 	metricsInterval                 time.Duration
 	metricsOffset                   time.Duration
+	metricsAggFields                []string
+	metricsAggReducer               string
+	metricsAggAligner               string
+	metricsAggAlignDuration         time.Duration
 	monitoringService               *monitoring.Service
 	apiCallsTotalMetric             prometheus.Counter
 	scrapesTotalMetric              prometheus.Counter
@@ -35,6 +40,10 @@ func NewMonitoringCollector(
 	metricsInterval time.Duration,
 	metricsOffset time.Duration,
 	monitoringService *monitoring.Service,
+	metricsAggFields []string,
+	metricsAggReducer string,
+	metricsAggAligner string,
+	metricsAggAlignDuration time.Duration,
 ) (*MonitoringCollector, error) {
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
@@ -101,6 +110,10 @@ func NewMonitoringCollector(
 		metricsTypePrefixes:             metricsTypePrefixes,
 		metricsInterval:                 metricsInterval,
 		metricsOffset:                   metricsOffset,
+		metricsAggFields:                metricsAggFields,
+		metricsAggReducer:               metricsAggReducer,
+		metricsAggAligner:               metricsAggAligner,
+		metricsAggAlignDuration:         metricsAggAlignDuration,
 		monitoringService:               monitoringService,
 		apiCallsTotalMetric:             apiCallsTotalMetric,
 		scrapesTotalMetric:              scrapesTotalMetric,
@@ -168,6 +181,14 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					Filter(fmt.Sprintf("metric.type=\"%s\"", metricDescriptor.Type)).
 					IntervalStartTime(startTime.Format(time.RFC3339Nano)).
 					IntervalEndTime(endTime.Format(time.RFC3339Nano))
+				if len(c.metricsAggFields) != 0 {
+					timeSeriesListCall = timeSeriesListCall.
+						AggregationGroupByFields(c.metricsAggFields...).
+						AggregationCrossSeriesReducer(c.metricsAggReducer).
+						AggregationPerSeriesAligner(c.metricsAggAligner).
+						AggregationAlignmentPeriod(fmt.Sprintf("%ds", c.metricsAggAlignDuration/time.Second))
+					fmt.Printf("duration: %ds", c.metricsAggAlignDuration/time.Second)
+				}
 
 				for {
 					c.apiCallsTotalMetric.Inc()
@@ -263,12 +284,56 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			labelValues = append(labelValues, value)
 		}
 
+		name := prometheus.BuildFQName("stackdriver", utils.NormalizeMetricName(timeSeries.Resource.Type), utils.NormalizeMetricName(timeSeries.Metric.Type))
+		if len(c.metricsAggFields) > 0 {
+			var parts []string
+			for _, f := range c.metricsAggFields {
+				subfields := strings.Split(f, ".")
+				parts = append(parts, subfields[len(subfields)-1])
+			}
+			prefix := strings.Join(parts, "_")
+
+			var suffix string
+			switch c.metricsAggReducer {
+			case "REDUCE_SUM":
+				suffix = "sum"
+			case "REDUCE_MEAN":
+				suffix = "avg"
+			case "REDUCE_MIN":
+				suffix = "min"
+			case "REDUCE_MAX":
+				suffix = "max"
+			case "REDUCE_STDDEV":
+				suffix = "stddex"
+			case "REDUCE_COUNT":
+				suffix = "count"
+			case "REDUCE_COUNT_TRUE":
+				suffix = "countrue"
+			case "REDUCE_COUNT_FALSE":
+				suffix = "countfalse"
+			case "REDUCE_FRACTION_TRUE":
+				suffix = "fractrue"
+			case "REDUCE_PERCENTILE_99":
+				suffix = "perc99"
+			case "REDUCE_PERCENTILE_95":
+				suffix = "perc95"
+			case "REDUCE_PERCENTILE_50":
+				suffix = "perc50"
+			case "REDUCE_PERCENTILE_05":
+				suffix = "perc05"
+			default:
+				suffix = c.metricsAggReducer
+			}
+
+			name = fmt.Sprintf("%s:%s:%s", prefix, name, suffix)
+		}
+
 		// The metric name to report is composed by the 3 parts:
 		// 1. namespace is a constant prefix (stackdriver)
 		// 2. subsystem is the monitored resource type (ie gce_instance)
 		// 3. name is the metric type (ie compute.googleapis.com/instance/cpu/usage_time)
 		metricDesc = prometheus.NewDesc(
-			prometheus.BuildFQName("stackdriver", utils.NormalizeMetricName(timeSeries.Resource.Type), utils.NormalizeMetricName(timeSeries.Metric.Type)),
+			name,
 			metricDescriptor.Description,
 			labelKeys,
 			prometheus.Labels{},

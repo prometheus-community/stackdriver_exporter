@@ -26,6 +26,22 @@ var (
 		"monitoring.metrics-type-prefixes", "Comma separated Google Stackdriver Monitoring Metric Type prefixes ($STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES).",
 	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES").Required().String()
 
+	monitoringMetricsAggFields = kingpin.Flag(
+		"monitoring.metrics-aggregation-fields", "Comma separated list of Stackdriver fields to aggregate over ($STACKDRIVER_EXPORTER_MONITORING_METRICS_AGGREGATION_FIELDS).",
+	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_AGGREGATION_FIELDS").Default("").String()
+
+	monitoringMetricsAggReducer = kingpin.Flag(
+		"monitoring.metrics-aggregation-reducer", "Stackdriver aggregation cross-series reducer ($STACKDRIVER_EXPORTER_MONITORING_METRICS_AGGREGATION_REDUCER).",
+	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_AGGREGATION_REDUCER").Default("REDUCE_SUM").String()
+
+	monitoringMetricsAggAligner = kingpin.Flag(
+		"monitoring.metrics-aggregation-aligner", "Stackdriver aggregation per-series aligner ($STACKDRIVER_EXPORTER_MONITORING_METRICS_AGGREGATION_ALIGNER).",
+	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_AGGREGATION_ALIGNER").Default("ALIGN_DELTA").String()
+
+	monitoringMetricsAggAlignDuration = kingpin.Flag(
+		"monitoring.metrics-aggregation-align-duration", "Stackdriver aggregation alignment duration ($STACKDRIVER_EXPORTER_MONITORING_METRICS_AGGREGATION_ALIGN_DURATION).",
+	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_AGGREGATION_ALIGN_DURATION").Default("1m").Duration()
+
 	monitoringMetricsInterval = kingpin.Flag(
 		"monitoring.metrics-interval", "Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used ($STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL).",
 	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL").Default("5m").Duration()
@@ -89,7 +105,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	monitoringCollector, err := collectors.NewMonitoringCollector(*projectID, metricsTypePrefixes, *monitoringMetricsInterval, *monitoringMetricsOffset, monitoringService)
+	var metricsAggFields []string
+	if *monitoringMetricsAggFields != "" {
+		metricsAggFields = strings.Split(*monitoringMetricsAggFields, ",")
+	}
+
+	monitoringCollector, err := collectors.NewMonitoringCollector(
+		*projectID,
+		metricsTypePrefixes,
+		*monitoringMetricsInterval,
+		*monitoringMetricsOffset,
+		monitoringService,
+		metricsAggFields,
+		*monitoringMetricsAggReducer,
+		*monitoringMetricsAggAligner,
+		*monitoringMetricsAggAlignDuration)
+
 	if err != nil {
 		log.Error(err)
 		os.Exit(1)
