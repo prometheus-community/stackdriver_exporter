@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/PuerkitoBio/rehttp"
+	"github.com/frodenas/stackdriver_exporter/collectors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/version"
@@ -13,8 +15,7 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/monitoring/v3"
 	"gopkg.in/alecthomas/kingpin.v2"
-
-	"github.com/frodenas/stackdriver_exporter/collectors"
+	"time"
 )
 
 var (
@@ -55,6 +56,15 @@ func createMonitoringService() (*monitoring.Service, error) {
 	ctx := context.Background()
 
 	googleClient, err := google.DefaultClient(ctx, monitoring.MonitoringReadScope)
+	googleClient.Timeout = time.Second * 10
+	googleClient.Transport = rehttp.NewTransport(
+		googleClient.Transport, // need to wrap DefaultClient transport
+		rehttp.RetryAll(
+			rehttp.RetryMaxRetries(3),
+			rehttp.RetryStatuses(503)), // Cloud support suggests retrying on 503 errors
+		rehttp.ExpJitterDelay(time.Second, 9*time.Second), // Set timeout to <10s as that is prom default timeout
+	)
+
 	if err != nil {
 		return nil, fmt.Errorf("Error creating Google client: %v", err)
 	}
