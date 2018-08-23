@@ -41,6 +41,10 @@ var (
 	metricsPath = kingpin.Flag(
 		"web.telemetry-path", "Path under which to expose Prometheus metrics ($STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH).",
 	).Envar("STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH").Default("/metrics").String()
+
+	collectorFillMissingLabels = kingpin.Flag(
+		"collector.fill-missing-labels", "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure ($STACKDRIVER_EXPORTER_COLLECTOR_FILL_MISSING_LABELS).",
+	).Envar("STACKDRIVER_EXPORTER_COLLECTOR_FILL_MISSING_LABELS").Default("true").Bool()
 )
 
 func init() {
@@ -89,7 +93,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	monitoringCollector, err := collectors.NewMonitoringCollector(*projectID, metricsTypePrefixes, *monitoringMetricsInterval, *monitoringMetricsOffset, monitoringService)
+	monitoringCollector, err := collectors.NewMonitoringCollector(*projectID, metricsTypePrefixes, *monitoringMetricsInterval, *monitoringMetricsOffset, monitoringService, *collectorFillMissingLabels)
 	if err != nil {
 		log.Error(err)
 		os.Exit(1)
