@@ -63,7 +63,7 @@ var (
 	).Envar("STACKDRIVER_EXPORTER_BACKODFF_JITTER_BASE").Default("1s").Duration()
 
 	stackdriverRetryStatuses = kingpin.Flag(
-		"stackdriver.retry-statuses", "The HTTP statuses that should trigger a retry (comma separated) ($STACKDRIVER_EXPORTER_RETRY_STATUSES)",
+		"stackdriver.retry-statuses", "The HTTP statuses that should trigger a retry ($STACKDRIVER_EXPORTER_RETRY_STATUSES)",
 	).Envar("STACKDRIVER_EXPORTER_RETRY_STATUSES").Default("503").Ints()
 )
 
