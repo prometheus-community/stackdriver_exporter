@@ -55,11 +55,11 @@ var (
 	).Envar("STACKDRIVER_EXPORTER_HTTP_TIMEOUT").Default("10s").Duration()
 
 	stackdriverMaxBackoffDuration = kingpin.Flag(
-		"stackdriver.http-timeout", "Max time between each request in an exp backoff scenario ($STACKDRIVER_EXPORTER_MAX_BACKOFF_DURATION)",
+		"stackdriver.max-backoff", "Max time between each request in an exp backoff scenario ($STACKDRIVER_EXPORTER_MAX_BACKOFF_DURATION)",
 	).Envar("STACKDRIVER_EXPORTER_MAX_BACKOFF_DURATION").Default("5s").Duration()
 
 	stackdriverBackoffJitterBase = kingpin.Flag(
-		"stackdriver.http-timeout", "The amount of jitter to introduce in a exp backoff scenario ($STACKDRIVER_EXPORTER_BACKODFF_JITTER_BASE)",
+		"stackdriver.backoff-jitter", "The amount of jitter to introduce in a exp backoff scenario ($STACKDRIVER_EXPORTER_BACKODFF_JITTER_BASE)",
 	).Envar("STACKDRIVER_EXPORTER_BACKODFF_JITTER_BASE").Default("1s").Duration()
 
 	stackdriverRetryStatuses = kingpin.Flag(
