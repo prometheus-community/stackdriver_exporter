@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/rehttp"
-	"github.com/frodenas/stackdriver_exporter/collectors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/version"
@@ -15,6 +14,8 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/monitoring/v3"
 	"gopkg.in/alecthomas/kingpin.v2"
+
+	"github.com/frodenas/stackdriver_exporter/collectors"
 )
 
 var (
