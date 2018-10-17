@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/PuerkitoBio/rehttp"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/version"
@@ -45,6 +46,26 @@ var (
 	collectorFillMissingLabels = kingpin.Flag(
 		"collector.fill-missing-labels", "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure ($STACKDRIVER_EXPORTER_COLLECTOR_FILL_MISSING_LABELS).",
 	).Envar("STACKDRIVER_EXPORTER_COLLECTOR_FILL_MISSING_LABELS").Default("true").Bool()
+
+	stackdriverMaxRetries = kingpin.Flag(
+		"stackdriver.max-retries", "Max number of retries that should be attempted on 503 errors from stackdriver. ($STACKDRIVER_EXPORTER_MAX_RETRIES)",
+	).Envar("STACKDRIVER_EXPORTER_MAX_RETRIES").Default("0").Int()
+
+	stackdriverHttpTimeout = kingpin.Flag(
+		"stackdriver.http-timeout", "How long should stackdriver_exporter wait for a result from the Stackdriver API ($STACKDRIVER_EXPORTER_HTTP_TIMEOUT)",
+	).Envar("STACKDRIVER_EXPORTER_HTTP_TIMEOUT").Default("10s").Duration()
+
+	stackdriverMaxBackoffDuration = kingpin.Flag(
+		"stackdriver.max-backoff", "Max time between each request in an exp backoff scenario ($STACKDRIVER_EXPORTER_MAX_BACKOFF_DURATION)",
+	).Envar("STACKDRIVER_EXPORTER_MAX_BACKOFF_DURATION").Default("5s").Duration()
+
+	stackdriverBackoffJitterBase = kingpin.Flag(
+		"stackdriver.backoff-jitter", "The amount of jitter to introduce in a exp backoff scenario ($STACKDRIVER_EXPORTER_BACKODFF_JITTER_BASE)",
+	).Envar("STACKDRIVER_EXPORTER_BACKODFF_JITTER_BASE").Default("1s").Duration()
+
+	stackdriverRetryStatuses = kingpin.Flag(
+		"stackdriver.retry-statuses", "The HTTP statuses that should trigger a retry ($STACKDRIVER_EXPORTER_RETRY_STATUSES)",
+	).Envar("STACKDRIVER_EXPORTER_RETRY_STATUSES").Default("503").Ints()
 )
 
 func init() {
@@ -55,6 +76,16 @@ func createMonitoringService() (*monitoring.Service, error) {
 	ctx := context.Background()
 
 	googleClient, err := google.DefaultClient(ctx, monitoring.MonitoringReadScope)
+
+	googleClient.Timeout = *stackdriverHttpTimeout
+	googleClient.Transport = rehttp.NewTransport(
+		googleClient.Transport, // need to wrap DefaultClient transport
+		rehttp.RetryAll(
+			rehttp.RetryMaxRetries(*stackdriverMaxRetries),
+			rehttp.RetryStatuses(*stackdriverRetryStatuses...)), // Cloud support suggests retrying on 503 errors
+		rehttp.ExpJitterDelay(*stackdriverBackoffJitterBase, *stackdriverMaxBackoffDuration), // Set timeout to <10s as that is prom default timeout
+	)
+
 	if err != nil {
 		return nil, fmt.Errorf("Error creating Google client: %v", err)
 	}
