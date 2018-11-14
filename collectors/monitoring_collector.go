@@ -28,6 +28,7 @@ type MonitoringCollector struct {
 	lastScrapeTimestampMetric       prometheus.Gauge
 	lastScrapeDurationSecondsMetric prometheus.Gauge
 	collectorFillMissingLabels      bool
+	monitoringDropDelegatedProjects bool
 }
 
 func NewMonitoringCollector(
@@ -37,6 +38,7 @@ func NewMonitoringCollector(
 	metricsOffset time.Duration,
 	monitoringService *monitoring.Service,
 	collectorFillMissingLabels bool,
+	monitoringDropDelegatedProjects bool,
 ) (*MonitoringCollector, error) {
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
@@ -111,6 +113,7 @@ func NewMonitoringCollector(
 		lastScrapeTimestampMetric:       lastScrapeTimestampMetric,
 		lastScrapeDurationSecondsMetric: lastScrapeDurationSecondsMetric,
 		collectorFillMissingLabels:      collectorFillMissingLabels,
+		monitoringDropDelegatedProjects: monitoringDropDelegatedProjects,
 	}
 
 	return monitoringCollector, nil
@@ -269,6 +272,21 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 		for key, value := range timeSeries.Resource.Labels {
 			labelKeys = append(labelKeys, key)
 			labelValues = append(labelValues, value)
+		}
+
+		if c.monitoringDropDelegatedProjects {
+			dropDelegatedProject := false
+
+			for idx, val := range labelKeys {
+				if val == "project_id" && labelValues[idx] != c.projectID {
+					dropDelegatedProject = true
+					break
+				}
+			}
+
+			if dropDelegatedProject {
+				continue
+			}
 		}
 
 		switch timeSeries.MetricKind {
