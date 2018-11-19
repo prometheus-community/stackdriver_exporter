@@ -76,6 +76,9 @@ func createMonitoringService() (*monitoring.Service, error) {
 	ctx := context.Background()
 
 	googleClient, err := google.DefaultClient(ctx, monitoring.MonitoringReadScope)
+	if err != nil {
+		return nil, fmt.Errorf("Error creating Google client: %v", err)
+	}
 
 	googleClient.Timeout = *stackdriverHttpTimeout
 	googleClient.Transport = rehttp.NewTransport(
@@ -85,10 +88,6 @@ func createMonitoringService() (*monitoring.Service, error) {
 			rehttp.RetryStatuses(*stackdriverRetryStatuses...)), // Cloud support suggests retrying on 503 errors
 		rehttp.ExpJitterDelay(*stackdriverBackoffJitterBase, *stackdriverMaxBackoffDuration), // Set timeout to <10s as that is prom default timeout
 	)
-
-	if err != nil {
-		return nil, fmt.Errorf("Error creating Google client: %v", err)
-	}
 
 	monitoringService, err := monitoring.New(googleClient)
 	if err != nil {
