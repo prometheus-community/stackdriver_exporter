@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/PuerkitoBio/rehttp"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/version"
@@ -21,6 +22,10 @@ var (
 	projectID = kingpin.Flag(
 		"google.project-id", "Google Project ID ($STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID).",
 	).Envar("STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID").Required().String()
+
+	monitoringDropDelegatedProjects = kingpin.Flag(
+		"monitoring.drop-delegated-projects", "Drop metrics from attached projects and fetch `project_id` only ($STACKDRIVER_EXPORTER_DROP_DELEGATED_PROJECTS).",
+	).Envar("STACKDRIVER_EXPORTER_DROP_DELEGATED_PROJECTS").Default("false").Bool()
 
 	monitoringMetricsTypePrefixes = kingpin.Flag(
 		"monitoring.metrics-type-prefixes", "Comma separated Google Stackdriver Monitoring Metric Type prefixes ($STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES).",
@@ -41,14 +46,33 @@ var (
 	metricsPath = kingpin.Flag(
 		"web.telemetry-path", "Path under which to expose Prometheus metrics ($STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH).",
 	).Envar("STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH").Default("/metrics").String()
+	collectorFillMissingLabels = kingpin.Flag(
+		"collector.fill-missing-labels", "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure ($STACKDRIVER_EXPORTER_COLLECTOR_FILL_MISSING_LABELS).",
+	).Envar("STACKDRIVER_EXPORTER_COLLECTOR_FILL_MISSING_LABELS").Default("true").Bool()
+
+	stackdriverMaxRetries = kingpin.Flag(
+		"stackdriver.max-retries", "Max number of retries that should be attempted on 503 errors from stackdriver. ($STACKDRIVER_EXPORTER_MAX_RETRIES)",
+	).Envar("STACKDRIVER_EXPORTER_MAX_RETRIES").Default("0").Int()
+
+	stackdriverHttpTimeout = kingpin.Flag(
+		"stackdriver.http-timeout", "How long should stackdriver_exporter wait for a result from the Stackdriver API ($STACKDRIVER_EXPORTER_HTTP_TIMEOUT)",
+	).Envar("STACKDRIVER_EXPORTER_HTTP_TIMEOUT").Default("10s").Duration()
+
+	stackdriverMaxBackoffDuration = kingpin.Flag(
+		"stackdriver.max-backoff", "Max time between each request in an exp backoff scenario ($STACKDRIVER_EXPORTER_MAX_BACKOFF_DURATION)",
+	).Envar("STACKDRIVER_EXPORTER_MAX_BACKOFF_DURATION").Default("5s").Duration()
+
+	stackdriverBackoffJitterBase = kingpin.Flag(
+		"stackdriver.backoff-jitter", "The amount of jitter to introduce in a exp backoff scenario ($STACKDRIVER_EXPORTER_BACKODFF_JITTER_BASE)",
+	).Envar("STACKDRIVER_EXPORTER_BACKODFF_JITTER_BASE").Default("1s").Duration()
+
+	stackdriverRetryStatuses = kingpin.Flag(
+		"stackdriver.retry-statuses", "The HTTP statuses that should trigger a retry ($STACKDRIVER_EXPORTER_RETRY_STATUSES)",
+	).Envar("STACKDRIVER_EXPORTER_RETRY_STATUSES").Default("503").Ints()
 
 	cacheRefreshInterval = kingpin.Flag(
 		"caching.interval", "Interval at which to fetch all metrics, set to 0s for no caching",
 	).Envar("STACKDRIVER_EXPORTER_CACHE_REFRESH_INTERVAL").Default("0s").Duration()
-
-	collectorFillMissingLabels = kingpin.Flag(
-		"collector.fill-missing-labels", "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure ($STACKDRIVER_EXPORTER_COLLECTOR_FILL_MISSING_LABELS).",
-	).Envar("STACKDRIVER_EXPORTER_COLLECTOR_FILL_MISSING_LABELS").Default("false").Bool()
 )
 
 func init() {
@@ -62,6 +86,15 @@ func createMonitoringService() (*monitoring.Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Error creating Google client: %v", err)
 	}
+
+	googleClient.Timeout = *stackdriverHttpTimeout
+	googleClient.Transport = rehttp.NewTransport(
+		googleClient.Transport, // need to wrap DefaultClient transport
+		rehttp.RetryAll(
+			rehttp.RetryMaxRetries(*stackdriverMaxRetries),
+			rehttp.RetryStatuses(*stackdriverRetryStatuses...)), // Cloud support suggests retrying on 503 errors
+		rehttp.ExpJitterDelay(*stackdriverBackoffJitterBase, *stackdriverMaxBackoffDuration), // Set timeout to <10s as that is prom default timeout
+	)
 
 	monitoringService, err := monitoring.New(googleClient)
 	if err != nil {
@@ -97,8 +130,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	var monitoringCollector prometheus.Collector
-	monitoringCollector, err = collectors.NewMonitoringCollector(*projectID, metricsTypePrefixes, *monitoringMetricsInterval, *monitoringMetricsOffset, monitoringService, *collectorFillMissingLabels)
+	monitoringCollector, err := collectors.NewMonitoringCollector(*projectID, metricsTypePrefixes, *monitoringMetricsInterval, *monitoringMetricsOffset, monitoringService, *collectorFillMissingLabels, *monitoringDropDelegatedProjects)
 	if err != nil {
 		log.Error(err)
 		os.Exit(1)
