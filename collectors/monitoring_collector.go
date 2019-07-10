@@ -184,8 +184,15 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 			go func(metricDescriptor *monitoring.MetricDescriptor, ch chan<- prometheus.Metric) {
 				defer wg.Done()
 				log.Debugf("Retrieving Google Stackdriver Monitoring metrics for descriptor `%s`...", metricDescriptor.Type)
+				filter := fmt.Sprintf("metric.type=\"%s\"", metricDescriptor.Type)
+				if c.monitoringDropDelegatedProjects {
+					filter = fmt.Sprintf(
+						"project=\"%s\" AND metric.type=\"%s\"",
+						c.projectID,
+						metricDescriptor.Type)
+				}
 				timeSeriesListCall := c.monitoringService.Projects.TimeSeries.List(utils.ProjectResource(c.projectID)).
-					Filter(fmt.Sprintf("metric.type=\"%s\"", metricDescriptor.Type)).
+					Filter(filter).
 					IntervalStartTime(startTime.Format(time.RFC3339Nano)).
 					IntervalEndTime(endTime.Format(time.RFC3339Nano))
 
@@ -229,8 +236,15 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 			defer wg.Done()
 			log.Debugf("Listing Google Stackdriver Monitoring metric descriptors starting with `%s`...", metricsTypePrefix)
 			ctx := context.Background()
+			filter := fmt.Sprintf("metric.type = starts_with(\"%s\")", metricsTypePrefix)
+			if c.monitoringDropDelegatedProjects {
+				filter = fmt.Sprintf(
+					"project = \"%s\" AND metric.type = starts_with(\"%s\")",
+					c.projectID,
+					metricsTypePrefix)
+			}
 			if err := c.monitoringService.Projects.MetricDescriptors.List(utils.ProjectResource(c.projectID)).
-				Filter(fmt.Sprintf("metric.type = starts_with(\"%s\")", metricsTypePrefix)).
+				Filter(filter).
 				Pages(ctx, metricDescriptorsFunction); err != nil {
 				errChannel <- err
 			}
