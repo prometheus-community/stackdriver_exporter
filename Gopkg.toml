@@ -28,3 +28,19 @@
 [prune]
   go-tests = true
   unused-packages = true
+
+[[override]]
+  name = "gopkg.in/fsnotify.v1"
+  source = "https://github.com/fsnotify/fsnotify.git"
+
+[[constraint]]
+  name = "github.com/prometheus/client_golang"
+  version = "0.9.4"
+
+[[constraint]]
+  name = "github.com/prometheus/common"
+  version = "0.6.0"
+
+[[constraint]]
+  name = "github.com/prometheus/procfs"
+  version = "0.0.2"

@@ -1,11 +1,14 @@
 package collectors
 
 import (
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/api/monitoring/v3"
 
-	"github.com/frodenas/stackdriver_exporter/utils"
 	"sort"
+
+	"github.com/frodenas/stackdriver_exporter/utils"
 )
 
 func buildFQName(timeSeries *monitoring.TimeSeries) string {
@@ -40,6 +43,7 @@ type ConstMetric struct {
 	valueType   prometheus.ValueType
 	value       float64
 	labelValues []string
+	reportTime  time.Time
 
 	keysHash uint64
 }
@@ -50,11 +54,12 @@ type HistogramMetric struct {
 	dist        *monitoring.Distribution
 	buckets     map[float64]uint64
 	labelValues []string
+	reportTime  time.Time
 
 	keysHash uint64
 }
 
-func (t *TimeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.TimeSeries, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string) {
+func (t *TimeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string) {
 	fqName := buildFQName(timeSeries)
 
 	if t.fillMissingLabels {
@@ -68,26 +73,30 @@ func (t *TimeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 			dist:        dist,
 			buckets:     buckets,
 			labelValues: labelValues,
+			reportTime:  reportTime,
 
 			keysHash: hashLabelKeys(labelKeys),
 		}
 		t.histogramMetrics[fqName] = append(vs, v)
 		return
 	}
-	t.ch <- t.newConstHistogram(fqName, labelKeys, dist, buckets, labelValues)
+	t.ch <- t.newConstHistogram(fqName, reportTime, labelKeys, dist, buckets, labelValues)
 }
 
-func (t *TimeSeriesMetrics) newConstHistogram(fqName string, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
-	return prometheus.MustNewConstHistogram(
-		t.newMetricDesc(fqName, labelKeys),
-		uint64(dist.Count),
-		dist.Mean*float64(dist.Count), // Stackdriver does not provide the sum, but we can fake it
-		buckets,
-		labelValues...,
+func (t *TimeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
+	return prometheus.NewMetricWithTimestamp(
+		reportTime,
+		prometheus.MustNewConstHistogram(
+			t.newMetricDesc(fqName, labelKeys),
+			uint64(dist.Count),
+			dist.Mean*float64(dist.Count), // Stackdriver does not provide the sum, but we can fake it
+			buckets,
+			labelValues...,
+		),
 	)
 }
 
-func (t *TimeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSeries, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string) {
+func (t *TimeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string) {
 	fqName := buildFQName(timeSeries)
 
 	if t.fillMissingLabels {
@@ -101,21 +110,25 @@ func (t *TimeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSer
 			valueType:   metricValueType,
 			value:       metricValue,
 			labelValues: labelValues,
+			reportTime:  reportTime,
 
 			keysHash: hashLabelKeys(labelKeys),
 		}
 		t.constMetrics[fqName] = append(vs, v)
 		return
 	}
-	t.ch <- t.newConstMetric(fqName, labelKeys, metricValueType, metricValue, labelValues)
+	t.ch <- t.newConstMetric(fqName, reportTime, labelKeys, metricValueType, metricValue, labelValues)
 }
 
-func (t *TimeSeriesMetrics) newConstMetric(fqName string, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string) prometheus.Metric {
-	return prometheus.MustNewConstMetric(
-		t.newMetricDesc(fqName, labelKeys),
-		metricValueType,
-		metricValue,
-		labelValues...,
+func (t *TimeSeriesMetrics) newConstMetric(fqName string, reportTime time.Time, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string) prometheus.Metric {
+	return prometheus.NewMetricWithTimestamp(
+		reportTime,
+		prometheus.MustNewConstMetric(
+			t.newMetricDesc(fqName, labelKeys),
+			metricValueType,
+			metricValue,
+			labelValues...,
+		),
 	)
 }
 
@@ -151,7 +164,7 @@ func (t *TimeSeriesMetrics) completeConstMetrics() {
 		}
 
 		for _, v := range vs {
-			t.ch <- t.newConstMetric(v.fqName, v.labelKeys, v.valueType, v.value, v.labelValues)
+			t.ch <- t.newConstMetric(v.fqName, v.reportTime, v.labelKeys, v.valueType, v.value, v.labelValues)
 		}
 	}
 }
@@ -170,7 +183,7 @@ func (t *TimeSeriesMetrics) completeHistogramMetrics() {
 			}
 		}
 		for _, v := range vs {
-			t.ch <- t.newConstHistogram(v.fqName, v.labelKeys, v.dist, v.buckets, v.labelValues)
+			t.ch <- t.newConstHistogram(v.fqName, v.reportTime, v.labelKeys, v.dist, v.buckets, v.labelValues)
 		}
 	}
 }

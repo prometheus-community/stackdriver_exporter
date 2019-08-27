@@ -342,7 +342,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			dist := newestTSPoint.Value.DistributionValue
 			buckets, err := c.generateHistogramBuckets(dist)
 			if err == nil {
-				timeSeriesMetrics.CollectNewConstHistogram(timeSeries, labelKeys, dist, buckets, labelValues)
+				timeSeriesMetrics.CollectNewConstHistogram(timeSeries, newestEndTime, labelKeys, dist, buckets, labelValues)
 			} else {
 				log.Debugf("Discarding resource %s metric %s: %s", timeSeries.Resource.Type, timeSeries.Metric.Type, err)
 			}
@@ -352,7 +352,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			continue
 		}
 
-		timeSeriesMetrics.CollectNewConstMetric(timeSeries, labelKeys, metricValueType, metricValue, labelValues)
+		timeSeriesMetrics.CollectNewConstMetric(timeSeries, newestEndTime, labelKeys, metricValueType, metricValue, labelValues)
 	}
 	timeSeriesMetrics.Complete()
 	return nil
