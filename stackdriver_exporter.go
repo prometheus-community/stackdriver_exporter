@@ -20,7 +20,7 @@ import (
 
 var (
 	projectID = kingpin.Flag(
-		"google.project-id", "Google Project ID ($STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID).",
+		"google.project-id", "Comma seperated Google Project IDs ($STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID).",
 	).Envar("STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID").Required().String()
 
 	monitoringDropDelegatedProjects = kingpin.Flag(
@@ -127,12 +127,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	monitoringCollector, err := collectors.NewMonitoringCollector(*projectID, metricsTypePrefixes, *monitoringMetricsInterval, *monitoringMetricsOffset, monitoringService, *collectorFillMissingLabels, *monitoringDropDelegatedProjects)
-	if err != nil {
-		log.Error(err)
-		os.Exit(1)
+	projectIDs := strings.Split(*projectID, ",")
+
+	for _, project := range projectIDs {
+		monitoringCollector, err := collectors.NewMonitoringCollector(project, metricsTypePrefixes, *monitoringMetricsInterval, *monitoringMetricsOffset, monitoringService, *collectorFillMissingLabels, *monitoringDropDelegatedProjects)
+		if err != nil {
+			log.Error(err)
+			os.Exit(1)
+		}
+		prometheus.MustRegister(monitoringCollector)
 	}
-	prometheus.MustRegister(monitoringCollector)
 
 	http.Handle(*metricsPath, prometheus.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
