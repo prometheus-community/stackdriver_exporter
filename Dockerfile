@@ -1,6 +1,6 @@
 ###############################################################################
 # compile stage
-FROM golang:1.11
+FROM golang:1.13-buster
 
 RUN mkdir -vp /go/src/github.com/frodenas/stackdriver_exporter/
 COPY . /go/src/github.com/frodenas/stackdriver_exporter
