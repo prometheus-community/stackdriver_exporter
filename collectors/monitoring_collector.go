@@ -187,7 +187,7 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 	if err := c.reportMonitoringMetrics(ch); err != nil {
 		errorMetric = float64(1)
 		c.scrapeErrorsTotalMetric.Inc()
-		log.Errorf("Error while getting Google Stackdriver Monitoring metrics: %s", err)
+		log.Fatalf("Error while getting Google Stackdriver Monitoring metrics: %s", err)
 	}
 	c.scrapeErrorsTotalMetric.Collect(ch)
 
