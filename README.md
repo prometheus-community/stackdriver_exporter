@@ -1,4 +1,5 @@
-# Google Stackdriver Prometheus Exporter [![Build Status](https://travis-ci.org/prometheus-community/stackdriver_exporter.png)](https://travis-ci.org/prometheus-community/stackdriver_exporter)
+# Google Stackdriver Prometheus Exporter
+[![Build Status](https://circleci.com/gh/prometheus-community/stackdriver_exporter.svg?style=svg)](https://circleci.com/gh/prometheus-community/stackdriver_exporter)
 
 A [Prometheus][prometheus] exporter for [Google Stackdriver Monitoring][stackdriver] metrics. It acts as a proxy that requests Stackdriver API for the metric's time-series everytime prometheus scrapes it.
 
@@ -8,7 +9,7 @@ A [Prometheus][prometheus] exporter for [Google Stackdriver Monitoring][stackdri
 
 Download the already existing [binaries][binaries] for your platform:
 
-```bash
+```console
 $ ./stackdriver_exporter <flags>
 ```
 
@@ -16,7 +17,7 @@ $ ./stackdriver_exporter <flags>
 
 Using the standard `go install` (you must have [Go][golang] already installed in your local machine):
 
-```bash
+```console
 $ go install github.com/prometheus-community/stackdriver_exporter
 $ stackdriver_exporter <flags>
 ```
@@ -25,7 +26,7 @@ $ stackdriver_exporter <flags>
 
 To run the stackdriver exporter as a Docker container, run:
 
-```bash
+```console
 $ docker run -p 9255:9255 prometheus-community/stackdriver-exporter <flags>
 ```
 
@@ -33,14 +34,14 @@ $ docker run -p 9255:9255 prometheus-community/stackdriver-exporter <flags>
 
 The exporter can be deployed to an already existing [Cloud Foundry][cloudfoundry] environment:
 
-```bash
+```console
 $ git clone https://github.com/prometheus-community/stackdriver_exporter.git
 $ cd stackdriver_exporter
 ```
 
 Modify the included [application manifest file][manifest] to include the desired properties. Then you can push the exporter to your Cloud Foundry environment:
 
-```bash
+```console
 $ cf push
 ```
 
