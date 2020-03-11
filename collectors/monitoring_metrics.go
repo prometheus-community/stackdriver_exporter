@@ -4,8 +4,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/api/monitoring/v3"
 
-	"github.com/frodenas/stackdriver_exporter/utils"
 	"sort"
+
+	"github.com/frodenas/stackdriver_exporter/utils"
 )
 
 func buildFQName(timeSeries *monitoring.TimeSeries) string {
@@ -18,7 +19,6 @@ func buildFQName(timeSeries *monitoring.TimeSeries) string {
 
 type TimeSeriesMetrics struct {
 	metricDescriptor *monitoring.MetricDescriptor
-	ch               chan<- prometheus.Metric
 
 	fillMissingLabels bool
 	constMetrics      map[string][]ConstMetric
@@ -74,7 +74,6 @@ func (t *TimeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 		t.histogramMetrics[fqName] = append(vs, v)
 		return
 	}
-	t.ch <- t.newConstHistogram(fqName, labelKeys, dist, buckets, labelValues)
 }
 
 func (t *TimeSeriesMetrics) newConstHistogram(fqName string, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
@@ -107,7 +106,6 @@ func (t *TimeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSer
 		t.constMetrics[fqName] = append(vs, v)
 		return
 	}
-	t.ch <- t.newConstMetric(fqName, labelKeys, metricValueType, metricValue, labelValues)
 }
 
 func (t *TimeSeriesMetrics) newConstMetric(fqName string, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string) prometheus.Metric {
@@ -131,12 +129,12 @@ func hashLabelKeys(labelKeys []string) uint64 {
 	return dh
 }
 
-func (t *TimeSeriesMetrics) Complete() {
-	t.completeConstMetrics()
-	t.completeHistogramMetrics()
+func (t *TimeSeriesMetrics) Complete(ch chan<- prometheus.Metric) {
+	t.completeConstMetrics(ch)
+	t.completeHistogramMetrics(ch)
 }
 
-func (t *TimeSeriesMetrics) completeConstMetrics() {
+func (t *TimeSeriesMetrics) completeConstMetrics(ch chan<- prometheus.Metric) {
 	for _, vs := range t.constMetrics {
 		if len(vs) > 1 {
 			var needFill bool
@@ -151,12 +149,12 @@ func (t *TimeSeriesMetrics) completeConstMetrics() {
 		}
 
 		for _, v := range vs {
-			t.ch <- t.newConstMetric(v.fqName, v.labelKeys, v.valueType, v.value, v.labelValues)
+			ch <- t.newConstMetric(v.fqName, v.labelKeys, v.valueType, v.value, v.labelValues)
 		}
 	}
 }
 
-func (t *TimeSeriesMetrics) completeHistogramMetrics() {
+func (t *TimeSeriesMetrics) completeHistogramMetrics(ch chan<- prometheus.Metric) {
 	for _, vs := range t.histogramMetrics {
 		if len(vs) > 1 {
 			var needFill bool
@@ -170,7 +168,7 @@ func (t *TimeSeriesMetrics) completeHistogramMetrics() {
 			}
 		}
 		for _, v := range vs {
-			t.ch <- t.newConstHistogram(v.fqName, v.labelKeys, v.dist, v.buckets, v.labelValues)
+			ch <- t.newConstHistogram(v.fqName, v.labelKeys, v.dist, v.buckets, v.labelValues)
 		}
 	}
 }
