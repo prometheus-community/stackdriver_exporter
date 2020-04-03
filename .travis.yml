@@ -2,7 +2,7 @@ sudo: required
 
 language: go
 
-go_import_path: github.com/frodenas/stackdriver_exporter
+go_import_path: github.com/prometheus-community/stackdriver_exporter
 
 services:
   - docker
@@ -14,7 +14,7 @@ jobs:
 
     - stage: Build docker image
       env:
-        - DOCKER_IMAGE_NAME=frodenas/stackdriver-exporter
+        - DOCKER_IMAGE_NAME=prometheus-community/stackdriver-exporter
         - secure: 5ae8Me0tn6lH476L9RtZJpZT9ZDyrGtWK1+VLZ7uUOd7Ip98YoU6fCndrw0zdRzYbu+8NFsZ+Iu0st6U2mgMuwWxTSEnlGIBEzPnqbG73jHpOtOChBFmsXqI1HfXq0GozSTYq+uCNpmXm34aTgZmMN0E0O4khnKpOUk/bgXDGrSbsV4rzCrTt/Q1rSHgg6kHRrRxNnYdANaLOlP6U9FcbyyEE7863AXKLZsOnendoewRO/eupsTMj6BOhA+/ANEkn8Lz0/3OrUiLUB32tvr8c5sPuZZkDktVprLvgR8vHpoCZYHnhJMc4Jjo4fqx5bz1LBYXaGvM2p+sO19ij1GI034OfgIG1Xnv8hoyBO/X7fVTy8ss2nKIQou/RXK1UNGVsBrLN+Sb9ErTLYVvupSSu+Cti/t1DGp9ksbbybRfvgLvGcg31ArsqJ/GOUryOObict7abJRP2LuR+y3OJW4iFPB3iFk8vw+4Tf5lCQPpNp1kIDL3hxG5Wn74kS41mxPVu2IeH9iN5MEUsjH1Q7g1mgNFEQERFron+X/vSEXA8ATXEDK6+EQahEYwuAO0zoIiGDaK3jta1r9Js45nuTXFGyZBd/u5fnprx77e22iKbyzU46Ru2BxoLa6KuaLOSu/TyCV1zaUaO4ged9Zuen7Zq5x8id/sXy8wDT/d+sA3Q2A=
         - secure: 3wSlarJAyfE2C4qeKO+lWInZsvAfYTWCB/s7U4/7jnOS2ZjMTZZ/I2GGSk2lOvW73kMEuez4Bz0VwADJg3RkdgC4a0eeUfWJt0IEkquzGRGyYVeB315R7OuO++rJaCsEwYZPloN3SdDgcuXxe3GsOeLCFKYABLPN1E4+P5j+5Ke4OKIW43EcNiAS2sTWYZikHyFGDi94DTX4z+gt0YmqloB3QOy3NzeHXIvoZgTIe3DqQx1kRhQvQfPvieBEaXvi69Pz31VwoaR9hnNo4eyGGOxvZk160fn9tCAw9byrcB7gZV/KTZ/OfcmFPbrsz/nUAH9WcKzLDYVo4D8H0KrKBKWN6KeHu21lVicTvBWJx3y5vBg0xVMYUvgv5KyQz+uoJzBj+u3uelFi7joIXhS+rYVaSnUuZ4VQoy7mDmwsjim1h6bCor6plQUqYdNpjk9cAiONU/Q0DymokYwofK5Ngq3EvHgXBUqY5ldRbxlr5pT0Vjhh2WIs3Rw9P4v8VnbqpfT+pYJRfyQKfHLvwDv/ag08tKMjhzqznfNxQnceq7Jzp2s0kcl37YP2DaUBSojECxXkQDgFAWaGoQZSuhla2AyU5V4iWOY1omDP1eMMNyCJ+U16PK4uFjmxmV+mCY1zLNa0tRz4P+hHT1TyY9hE/6WE8OM99DsHjPiJa+lJPMY=
       script:

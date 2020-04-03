@@ -1,31 +1,83 @@
 # Contributing
 
-In the spirit of [free software](http://www.fsf.org/licensing/essays/free-sw.html), **everyone** is encouraged to help improve this project.
+Prometheus uses GitHub to manage reviews of pull requests.
 
-Here are some ways *you* can contribute:
+* If you are a new contributor see: [Steps to Contribute](#steps-to-contribute)
 
-* by using alpha, beta, and prerelease versions
-* by reporting bugs
-* by suggesting new features
-* by writing or editing documentation
-* by writing specifications
-* by writing code (**no patch is too small**: fix typos, add comments, clean up inconsistent whitespace)
-* by refactoring code
-* by closing [issues](https://github.com/frodenas/stackdriver_exporter/issues)
-* by reviewing patches
+* If you have a trivial fix or improvement, go ahead and create a pull request,
+  addressing (with `@...`) a suitable maintainer of this repository (see
+  [MAINTAINERS.md](MAINTAINERS.md)) in the description of the pull request.
 
-## Submitting an Issue
+* If you plan to do something more involved, first discuss your ideas
+  on our [mailing list](https://groups.google.com/forum/?fromgroups#!forum/prometheus-developers).
+  This will avoid unnecessary work and surely give you and us a good deal
+  of inspiration. Also please see our [non-goals issue](https://github.com/prometheus/docs/issues/149) on areas that the Prometheus community doesn't plan to work on.
 
-We use the [GitHub issue tracker](https://github.com/frodenas/stackdriver_exporter/issues) to track bugs and features. Before submitting a bug report or feature request, check to make sure it hasn't already been submitted. You can indicate support for an existing issue by voting it up. When submitting a bug report, please include a [Gist](http://gist.github.com/) that includes a stack trace and any details that may be necessary to reproduce the bug. Ideally, a bug report should include a pull request with failing specs.
+* Relevant coding style guidelines are the [Go Code Review
+  Comments](https://code.google.com/p/go-wiki/wiki/CodeReviewComments)
+  and the _Formatting and style_ section of Peter Bourgon's [Go: Best
+  Practices for Production
+  Environments](https://peter.bourgon.org/go-in-production/#formatting-and-style).
 
-## Submitting a Pull Request
+* Be sure to sign off on the [DCO](https://github.com/probot/dco#how-it-works)
 
-1. Fork the project.
-2. Create a topic branch.
-3. Implement your feature or bug fix.
-4. Commit and push your changes.
-5. Submit a pull request.
 
-## Code of Conduct
+## Steps to Contribute
 
-Please note that this project is released with a [Contributor Code of Conduct](https://github.com/frodenas/stackdriver_exporter/blob/master/CODE_OF_CONDUCT.md). By participating in this project you agree to abide by its terms.
+Should you wish to work on an issue, please claim it first by commenting on the GitHub issue that you want to work on it. This is to prevent duplicated efforts from contributors on the same issue.
+
+Please check the [`low-hanging-fruit`](https://github.com/prometheus/prometheus/issues?q=is%3Aissue+is%3Aopen+label%3A%22low+hanging+fruit%22) label to find issues that are good for getting started. If you have questions about one of the issues, with or without the tag, please comment on them and one of the maintainers will clarify it. For a quicker response, contact us over [IRC](https://prometheus.io/community).
+
+For complete instructions on how to compile see: [Building From Source](https://github.com/prometheus/prometheus#building-from-source)
+
+For quickly compiling and testing your changes do:
+```
+# For building.
+go build ./cmd/prometheus/
+./prometheus
+
+# For testing.
+make test         # Make sure all the tests pass before you commit and push :)
+```
+
+We use [`golangci-lint`](https://github.com/golangci/golangci-lint) for linting the code. If it reports an issue and you think that the warning needs to be disregarded or is a false-positive, you can add a special comment `//nolint:linter1[,linter2,...]` before the offending line. Use this sparingly though, fixing the code to comply with the linter's recommendation is in general the preferred course of action.
+
+All our issues are regularly tagged so that you can also filter down the issues involving the components you want to work on. For our labeling policy refer [the wiki page](https://github.com/prometheus/prometheus/wiki/Label-Names-and-Descriptions).
+
+## Pull Request Checklist
+
+* Branch from the master branch and, if needed, rebase to the current master branch before submitting your pull request. If it doesn't merge cleanly with master you may be asked to rebase your changes.
+
+* Commits should be as small as possible, while ensuring that each commit is correct independently (i.e., each commit should compile and pass tests).
+
+* If your patch is not getting reviewed or you need a specific person to review it, you can @-reply a reviewer asking for a review in the pull request or a comment, or you can ask for a review on IRC channel [#prometheus](https://webchat.freenode.net/?channels=#prometheus) on irc.freenode.net (for the easiest start, [join via Riot](https://riot.im/app/#/room/#prometheus:matrix.org)).
+
+* Add tests relevant to the fixed bug or new feature.
+
+## Dependency management
+
+The Prometheus project uses [Go modules](https://golang.org/cmd/go/#hdr-Modules__module_versions__and_more) to manage dependencies on external packages. This requires a working Go environment with version 1.13 or greater installed.
+
+All dependencies are vendored in the `vendor/` directory.
+
+To add or update a new dependency, use the `go get` command:
+
+```bash
+# Pick the latest tagged release.
+go get example.com/some/module/pkg
+
+# Pick a specific version.
+go get example.com/some/module/pkg@vX.Y.Z
+```
+
+Tidy up the `go.mod` and `go.sum` files and copy the new/updated dependency to the `vendor/` directory:
+
+
+```bash
+# The GO111MODULE variable can be omitted when the code isn't located in GOPATH.
+GO111MODULE=on go mod tidy
+
+GO111MODULE=on go mod vendor
+```
+
+You have to commit the changes to `go.mod`, `go.sum` and the `vendor/` directory before submitting the pull request.

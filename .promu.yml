@@ -2,7 +2,7 @@ verbose: false
 go:
   cgo: false
 repository:
-  path: github.com/frodenas/stackdriver_exporter
+  path: github.com/prometheus-community/stackdriver_exporter
 build:
   flags: -a -tags 'netgo static_build'
   ldflags: |

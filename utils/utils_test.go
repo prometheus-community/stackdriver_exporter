@@ -4,7 +4,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/frodenas/stackdriver_exporter/utils"
+	. "github.com/prometheus-community/stackdriver_exporter/utils"
 )
 
 var _ = Describe("NormalizeMetricName", func() {

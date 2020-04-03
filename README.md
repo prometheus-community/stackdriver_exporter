@@ -1,4 +1,4 @@
-# Google Stackdriver Prometheus Exporter [![Build Status](https://travis-ci.org/frodenas/stackdriver_exporter.png)](https://travis-ci.org/frodenas/stackdriver_exporter)
+# Google Stackdriver Prometheus Exporter [![Build Status](https://travis-ci.org/prometheus-community/stackdriver_exporter.png)](https://travis-ci.org/prometheus-community/stackdriver_exporter)
 
 A [Prometheus][prometheus] exporter for [Google Stackdriver Monitoring][stackdriver] metrics. It acts as a proxy that requests Stackdriver API for the metric's time-series everytime prometheus scrapes it.
 
@@ -17,7 +17,7 @@ $ ./stackdriver_exporter <flags>
 Using the standard `go install` (you must have [Go][golang] already installed in your local machine):
 
 ```bash
-$ go install github.com/frodenas/stackdriver_exporter
+$ go install github.com/prometheus-community/stackdriver_exporter
 $ stackdriver_exporter <flags>
 ```
 
@@ -26,7 +26,7 @@ $ stackdriver_exporter <flags>
 To run the stackdriver exporter as a Docker container, run:
 
 ```bash
-$ docker run -p 9255:9255 frodenas/stackdriver-exporter <flags>
+$ docker run -p 9255:9255 prometheus-community/stackdriver-exporter <flags>
 ```
 
 ### Cloud Foundry
@@ -34,7 +34,7 @@ $ docker run -p 9255:9255 frodenas/stackdriver-exporter <flags>
 The exporter can be deployed to an already existing [Cloud Foundry][cloudfoundry] environment:
 
 ```bash
-$ git clone https://github.com/frodenas/stackdriver_exporter.git
+$ git clone https://github.com/prometheus-community/stackdriver_exporter.git
 $ cd stackdriver_exporter
 ```
 
@@ -117,14 +117,14 @@ Apache License 2.0, see [LICENSE][license].
 [access-control]: https://cloud.google.com/monitoring/access-control
 [access-scopes]: https://cloud.google.com/compute/docs/access/service-accounts#accesscopesiam
 [application-default-credentials]: https://developers.google.com/identity/protocols/application-default-credentials
-[binaries]: https://github.com/frodenas/stackdriver_exporter/releases
+[binaries]: https://github.com/prometheus-community/stackdriver_exporter/releases
 [cloudfoundry]: https://www.cloudfoundry.org/
-[contributing]: https://github.com/frodenas/stackdriver_exporter/blob/master/CONTRIBUTING.md
+[contributing]: https://github.com/prometheus-community/stackdriver_exporter/blob/master/CONTRIBUTING.md
 [google-compute]: https://cloud.google.com/compute/
 [golang]: https://golang.org/
-[license]: https://github.com/frodenas/stackdriver_exporter/blob/master/LICENSE
-[manifest]: https://github.com/frodenas/stackdriver_exporter/blob/master/manifest.yml
-[metrics-prefix-example]: https://github.com/frodenas/stackdriver_exporter#example
+[license]: https://github.com/prometheus-community/stackdriver_exporter/blob/master/LICENSE
+[manifest]: https://github.com/prometheus-community/stackdriver_exporter/blob/master/manifest.yml
+[metrics-prefix-example]: https://github.com/prometheus-community/stackdriver_exporter#example
 [metrics-list]: https://cloud.google.com/monitoring/api/metrics
 [metrics-name]: https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
 [monitored-resources]: https://cloud.google.com/monitoring/api/resources

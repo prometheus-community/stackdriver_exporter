@@ -4,7 +4,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/api/monitoring/v3"
 
-	"github.com/frodenas/stackdriver_exporter/utils"
+	"github.com/prometheus-community/stackdriver_exporter/utils"
 	"sort"
 )
 
