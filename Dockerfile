@@ -1,5 +1,5 @@
 FROM        quay.io/prometheus/busybox:latest
-MAINTAINER  Ferran Rodenas <frodenas@gmail.com>
+LABEL maintainer="The Prometheus Authors <prometheus-developers@googlegroups.com>"
 
 COPY stackdriver_exporter /bin/stackdriver_exporter
 

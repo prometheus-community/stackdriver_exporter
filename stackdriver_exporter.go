@@ -15,7 +15,7 @@ import (
 	"google.golang.org/api/monitoring/v3"
 	"gopkg.in/alecthomas/kingpin.v2"
 
-	"github.com/frodenas/stackdriver_exporter/collectors"
+	"github.com/prometheus-community/stackdriver_exporter/collectors"
 )
 
 var (

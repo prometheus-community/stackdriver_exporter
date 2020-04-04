@@ -12,7 +12,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/api/monitoring/v3"
 
-	"github.com/frodenas/stackdriver_exporter/utils"
+	"github.com/prometheus-community/stackdriver_exporter/utils"
 )
 
 type MonitoringCollector struct {
