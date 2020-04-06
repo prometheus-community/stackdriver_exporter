@@ -107,7 +107,7 @@ func createMonitoringService() (*monitoring.Service, error) {
 		rehttp.ExpJitterDelay(*stackdriverBackoffJitterBase, *stackdriverMaxBackoffDuration), // Set timeout to <10s as that is prom default timeout
 	)
 
-	monitoringService, err := monitoring.New(googleClient)
+	monitoringService, err := monitoring.New(googleClient) //nolint:staticcheck
 	if err != nil {
 		return nil, fmt.Errorf("Error creating Google Stackdriver Monitoring service: %v", err)
 	}
