@@ -57,6 +57,7 @@ workflows:
           tags:
             only: /.*/
     - prometheus/build:
+        name: build
         filters:
           tags:
             only: /.*/

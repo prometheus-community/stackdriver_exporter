@@ -1,3 +1,16 @@
+// Copyright 2020 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package collectors
 
 import (
@@ -367,9 +380,7 @@ func (c *MonitoringCollector) generateHistogramBuckets(
 	case opts.ExplicitBuckets != nil:
 		// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TypedValue#explicit
 		bucketKeys = make([]float64, len(opts.ExplicitBuckets.Bounds)+1)
-		for i, b := range opts.ExplicitBuckets.Bounds {
-			bucketKeys[i] = b
-		}
+		copy(opts.ExplicitBuckets.Bounds, bucketKeys)
 	case opts.LinearBuckets != nil:
 		// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TypedValue#linear
 		// NumFiniteBuckets is inclusive so bucket count is num+2
