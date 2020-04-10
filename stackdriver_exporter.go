@@ -27,6 +27,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/monitoring/v3"
+	"google.golang.org/api/option"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
@@ -107,7 +108,7 @@ func createMonitoringService() (*monitoring.Service, error) {
 		rehttp.ExpJitterDelay(*stackdriverBackoffJitterBase, *stackdriverMaxBackoffDuration), // Set timeout to <10s as that is prom default timeout
 	)
 
-	monitoringService, err := monitoring.New(googleClient) //nolint:staticcheck
+	monitoringService, err := monitoring.NewService(ctx, option.WithHTTPClient(googleClient))
 	if err != nil {
 		return nil, fmt.Errorf("Error creating Google Stackdriver Monitoring service: %v", err)
 	}

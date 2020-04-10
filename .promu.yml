@@ -5,7 +5,7 @@ repository:
   path: github.com/prometheus-community/stackdriver_exporter
 build:
   binaries:
-  - name: stackdriver_exporter
+    - name: stackdriver_exporter
   flags: -mod=vendor -a -tags 'netgo static_build'
   ldflags: |
     -X github.com/prometheus/common/version.Version={{.Version}}
