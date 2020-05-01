@@ -1,6 +1,4 @@
-verbose: false
 go:
-  cgo: false
   # This must match .circle/config.yml.
   version: 1.14
 repository:

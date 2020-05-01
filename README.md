@@ -27,7 +27,7 @@ $ stackdriver_exporter <flags>
 To run the stackdriver exporter as a Docker container, run:
 
 ```console
-$ docker run -p 9255:9255 prometheus-community/stackdriver-exporter <flags>
+$ docker run -p 9255:9255 prometheuscommunity/stackdriver-exporter <flags>
 ```
 
 ### Cloud Foundry
