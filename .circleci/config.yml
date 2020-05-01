@@ -25,6 +25,7 @@ jobs:
 
     steps:
     - prometheus/setup_build_environment
+    - run: ls -lR .build
     - prometheus/publish_images:
         registry: docker.io
         organization: prometheuscommunity
