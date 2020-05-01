@@ -1,6 +1,10 @@
 ## master / unreleased
 
+## 0.7.0 / 2020-05-01
+
 * [CHANGE] Remove deprecated `monitoring.New()` use. #76
+* [ENHANCEMENT] Server-side selection of project's metrics #53
+* [BUGFIX] Ensure metrics are fetched once for each metric descriptor #50
   
 ## 0.6.0 / 2018-12-02
 
