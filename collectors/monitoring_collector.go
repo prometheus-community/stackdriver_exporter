@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,8 +25,35 @@ import (
 	"github.com/prometheus/common/log"
 	"golang.org/x/net/context"
 	"google.golang.org/api/monitoring/v3"
+	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/prometheus-community/stackdriver_exporter/utils"
+)
+
+var (
+	projectID = kingpin.Flag(
+		"google.project-id", "Google Project ID ($STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID).",
+	).Envar("STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID").Required().String()
+
+	monitoringMetricsTypePrefixes = kingpin.Flag(
+		"monitoring.metrics-type-prefixes", "Comma separated Google Stackdriver Monitoring Metric Type prefixes ($STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES).",
+	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES").Required().String()
+
+	monitoringMetricsInterval = kingpin.Flag(
+		"monitoring.metrics-interval", "Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used ($STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL).",
+	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL").Default("5m").Duration()
+
+	monitoringMetricsOffset = kingpin.Flag(
+		"monitoring.metrics-offset", "Offset for the Google Stackdriver Monitoring Metrics interval into the past ($STACKDRIVER_EXPORTER_MONITORING_METRICS_OFFSET).",
+	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_OFFSET").Default("0s").Duration()
+
+	collectorFillMissingLabels = kingpin.Flag(
+		"collector.fill-missing-labels", "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure ($STACKDRIVER_EXPORTER_COLLECTOR_FILL_MISSING_LABELS).",
+	).Envar("STACKDRIVER_EXPORTER_COLLECTOR_FILL_MISSING_LABELS").Default("true").Bool()
+
+	monitoringDropDelegatedProjects = kingpin.Flag(
+		"monitoring.drop-delegated-projects", "Drop metrics from attached projects and fetch `project_id` only ($STACKDRIVER_EXPORTER_DROP_DELEGATED_PROJECTS).",
+	).Envar("STACKDRIVER_EXPORTER_DROP_DELEGATED_PROJECTS").Default("false").Bool()
 )
 
 type MonitoringCollector struct {
@@ -44,22 +72,22 @@ type MonitoringCollector struct {
 	monitoringDropDelegatedProjects bool
 }
 
-func NewMonitoringCollector(
-	projectID string,
-	metricsTypePrefixes []string,
-	metricsInterval time.Duration,
-	metricsOffset time.Duration,
-	monitoringService *monitoring.Service,
-	collectorFillMissingLabels bool,
-	monitoringDropDelegatedProjects bool,
-) (*MonitoringCollector, error) {
+func NewMonitoringCollector(monitoringService *monitoring.Service) (*MonitoringCollector, error) {
+	if *projectID == "" {
+		return nil, errors.New("Flag `google.project-id` is required")
+	}
+
+	if *monitoringMetricsTypePrefixes == "" {
+		return nil, errors.New("Flag `monitoring.metrics-type-prefixes` is required")
+	}
+
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace:   "stackdriver",
 			Subsystem:   "monitoring",
 			Name:        "api_calls_total",
 			Help:        "Total number of Google Stackdriver Monitoring API calls made.",
-			ConstLabels: prometheus.Labels{"project_id": projectID},
+			ConstLabels: prometheus.Labels{"project_id": *projectID},
 		},
 	)
 
@@ -69,7 +97,7 @@ func NewMonitoringCollector(
 			Subsystem:   "monitoring",
 			Name:        "scrapes_total",
 			Help:        "Total number of Google Stackdriver Monitoring metrics scrapes.",
-			ConstLabels: prometheus.Labels{"project_id": projectID},
+			ConstLabels: prometheus.Labels{"project_id": *projectID},
 		},
 	)
 
@@ -79,7 +107,7 @@ func NewMonitoringCollector(
 			Subsystem:   "monitoring",
 			Name:        "scrape_errors_total",
 			Help:        "Total number of Google Stackdriver Monitoring metrics scrape errors.",
-			ConstLabels: prometheus.Labels{"project_id": projectID},
+			ConstLabels: prometheus.Labels{"project_id": *projectID},
 		},
 	)
 
@@ -89,7 +117,7 @@ func NewMonitoringCollector(
 			Subsystem:   "monitoring",
 			Name:        "last_scrape_error",
 			Help:        "Whether the last metrics scrape from Google Stackdriver Monitoring resulted in an error (1 for error, 0 for success).",
-			ConstLabels: prometheus.Labels{"project_id": projectID},
+			ConstLabels: prometheus.Labels{"project_id": *projectID},
 		},
 	)
 
@@ -99,7 +127,7 @@ func NewMonitoringCollector(
 			Subsystem:   "monitoring",
 			Name:        "last_scrape_timestamp",
 			Help:        "Number of seconds since 1970 since last metrics scrape from Google Stackdriver Monitoring.",
-			ConstLabels: prometheus.Labels{"project_id": projectID},
+			ConstLabels: prometheus.Labels{"project_id": *projectID},
 		},
 	)
 
@@ -109,15 +137,15 @@ func NewMonitoringCollector(
 			Subsystem:   "monitoring",
 			Name:        "last_scrape_duration_seconds",
 			Help:        "Duration of the last metrics scrape from Google Stackdriver Monitoring.",
-			ConstLabels: prometheus.Labels{"project_id": projectID},
+			ConstLabels: prometheus.Labels{"project_id": *projectID},
 		},
 	)
 
 	monitoringCollector := &MonitoringCollector{
-		projectID:                       projectID,
-		metricsTypePrefixes:             metricsTypePrefixes,
-		metricsInterval:                 metricsInterval,
-		metricsOffset:                   metricsOffset,
+		projectID:                       *projectID,
+		metricsTypePrefixes:             strings.Split(*monitoringMetricsTypePrefixes, ","),
+		metricsInterval:                 *monitoringMetricsInterval,
+		metricsOffset:                   *monitoringMetricsOffset,
 		monitoringService:               monitoringService,
 		apiCallsTotalMetric:             apiCallsTotalMetric,
 		scrapesTotalMetric:              scrapesTotalMetric,
@@ -125,8 +153,8 @@ func NewMonitoringCollector(
 		lastScrapeErrorMetric:           lastScrapeErrorMetric,
 		lastScrapeTimestampMetric:       lastScrapeTimestampMetric,
 		lastScrapeDurationSecondsMetric: lastScrapeDurationSecondsMetric,
-		collectorFillMissingLabels:      collectorFillMissingLabels,
-		monitoringDropDelegatedProjects: monitoringDropDelegatedProjects,
+		collectorFillMissingLabels:      *collectorFillMissingLabels,
+		monitoringDropDelegatedProjects: *monitoringDropDelegatedProjects,
 	}
 
 	return monitoringCollector, nil
