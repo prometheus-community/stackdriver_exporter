@@ -72,7 +72,7 @@ type MonitoringCollector struct {
 	monitoringDropDelegatedProjects bool
 }
 
-func NewMonitoringCollector(monitoringService *monitoring.Service) (*MonitoringCollector, error) {
+func NewMonitoringCollector(monitoringService *monitoring.Service, filters map[string]bool) (*MonitoringCollector, error) {
 	if *projectID == "" {
 		return nil, errors.New("Flag `google.project-id` is required")
 	}
@@ -141,9 +141,20 @@ func NewMonitoringCollector(monitoringService *monitoring.Service) (*MonitoringC
 		},
 	)
 
+	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
+	filteredPrefixes := metricsTypePrefixes
+	if len(filters) > 0 {
+		filteredPrefixes = nil
+		for _, prefix := range metricsTypePrefixes {
+			if filters[prefix] {
+				filteredPrefixes = append(filteredPrefixes, prefix)
+			}
+		}
+	}
+
 	monitoringCollector := &MonitoringCollector{
 		projectID:                       *projectID,
-		metricsTypePrefixes:             strings.Split(*monitoringMetricsTypePrefixes, ","),
+		metricsTypePrefixes:             filteredPrefixes,
 		metricsInterval:                 *monitoringMetricsInterval,
 		metricsOffset:                   *monitoringMetricsOffset,
 		monitoringService:               monitoringService,
