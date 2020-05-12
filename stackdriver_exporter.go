@@ -90,6 +90,34 @@ func createMonitoringService() (*monitoring.Service, error) {
 	return monitoringService, nil
 }
 
+func newHandler(m *monitoring.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		collectParams := r.URL.Query()["collect[]"]
+
+		// Create filters for "collect[]" query parameters.
+		filters := make(map[string]bool)
+		for _, param := range collectParams {
+			filters[param] = true
+		}
+
+		monitoringCollector, err := collectors.NewMonitoringCollector(m, filters)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		registry := prometheus.NewRegistry()
+		registry.MustRegister(monitoringCollector)
+
+		gatherers := prometheus.Gatherers{
+			prometheus.DefaultGatherer,
+			registry,
+		}
+		// Delegate http serving to Prometheus client library, which will call collector.Collect.
+		h := promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{})
+		h.ServeHTTP(w, r)
+	}
+}
+
 func main() {
 	log.AddFlags(kingpin.CommandLine)
 	kingpin.Version(version.Print("stackdriver_exporter"))
@@ -104,13 +132,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	monitoringCollector, err := collectors.NewMonitoringCollector(monitoringService)
-	if err != nil {
-		log.Fatal(err)
-	}
-	prometheus.MustRegister(monitoringCollector)
+	handlerFunc := newHandler(monitoringService)
 
-	http.Handle(*metricsPath, promhttp.Handler())
+	http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handlerFunc))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<html>
              <head><title>Stackdriver Exporter</title></head>

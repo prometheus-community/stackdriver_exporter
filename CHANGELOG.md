@@ -1,5 +1,7 @@
 ## master / unreleased
 
+* [FEATURE] Add metrics prefix collect URL param
+
 ## 0.7.0 / 2020-05-01
 
 * [CHANGE] Remove deprecated `monitoring.New()` use. #76
