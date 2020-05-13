@@ -17,12 +17,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/log"
 	"golang.org/x/net/context"
 	"google.golang.org/api/monitoring/v3"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -70,9 +72,10 @@ type MonitoringCollector struct {
 	lastScrapeDurationSecondsMetric prometheus.Gauge
 	collectorFillMissingLabels      bool
 	monitoringDropDelegatedProjects bool
+	logger                          log.Logger
 }
 
-func NewMonitoringCollector(monitoringService *monitoring.Service, filters map[string]bool) (*MonitoringCollector, error) {
+func NewMonitoringCollector(monitoringService *monitoring.Service, filters map[string]bool, logger log.Logger) (*MonitoringCollector, error) {
 	if *projectID == "" {
 		return nil, errors.New("Flag `google.project-id` is required")
 	}
@@ -166,6 +169,7 @@ func NewMonitoringCollector(monitoringService *monitoring.Service, filters map[s
 		lastScrapeDurationSecondsMetric: lastScrapeDurationSecondsMetric,
 		collectorFillMissingLabels:      *collectorFillMissingLabels,
 		monitoringDropDelegatedProjects: *monitoringDropDelegatedProjects,
+		logger:                          logger,
 	}
 
 	return monitoringCollector, nil
@@ -187,7 +191,8 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 	if err := c.reportMonitoringMetrics(ch); err != nil {
 		errorMetric = float64(1)
 		c.scrapeErrorsTotalMetric.Inc()
-		log.Fatalf("Error while getting Google Stackdriver Monitoring metrics: %s", err)
+		level.Error(c.logger).Log("msg", "Error while getting Google Stackdriver Monitoring metrics", "err", err)
+		os.Exit(1)
 	}
 	c.scrapeErrorsTotalMetric.Collect(ch)
 
@@ -235,7 +240,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 			wg.Add(1)
 			go func(metricDescriptor *monitoring.MetricDescriptor, ch chan<- prometheus.Metric) {
 				defer wg.Done()
-				log.Debugf("Retrieving Google Stackdriver Monitoring metrics for descriptor `%s`...", metricDescriptor.Type)
+				level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics for descriptor", "descriptor", metricDescriptor.Type)
 				filter := fmt.Sprintf("metric.type=\"%s\"", metricDescriptor.Type)
 				if c.monitoringDropDelegatedProjects {
 					filter = fmt.Sprintf(
@@ -252,7 +257,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					c.apiCallsTotalMetric.Inc()
 					page, err := timeSeriesListCall.Do()
 					if err != nil {
-						log.Errorf("Error retrieving Time Series metrics for descriptor `%s`: %v", metricDescriptor.Type, err)
+						level.Error(c.logger).Log("msg", "error retrieving Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
 						errChannel <- err
 						break
 					}
@@ -260,7 +265,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 						break
 					}
 					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch); err != nil {
-						log.Errorf("Error reporting Time Series metrics for descriptor `%s`: %v", metricDescriptor.Type, err)
+						level.Error(c.logger).Log("msg", "error reporting Time Series metrics for descripto", "descriptor", metricDescriptor.Type, "err", err)
 						errChannel <- err
 						break
 					}
@@ -286,7 +291,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 		wg.Add(1)
 		go func(metricsTypePrefix string) {
 			defer wg.Done()
-			log.Debugf("Listing Google Stackdriver Monitoring metric descriptors starting with `%s`...", metricsTypePrefix)
+			level.Debug(c.logger).Log("msg", "listing Google Stackdriver Monitoring metric descriptors starting with", "prefix", metricsTypePrefix)
 			ctx := context.Background()
 			filter := fmt.Sprintf("metric.type = starts_with(\"%s\")", metricsTypePrefix)
 			if c.monitoringDropDelegatedProjects {
@@ -396,11 +401,11 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			if err == nil {
 				timeSeriesMetrics.CollectNewConstHistogram(timeSeries, labelKeys, dist, buckets, labelValues)
 			} else {
-				log.Debugf("Discarding resource %s metric %s: %s", timeSeries.Resource.Type, timeSeries.Metric.Type, err)
+				level.Debug(c.logger).Log("msg", "discarding", "resource", timeSeries.Resource.Type, "metric", timeSeries.Metric.Type, "err", err)
 			}
 			continue
 		default:
-			log.Debugf("Discarding `%s` metric: %+v", timeSeries.ValueType, timeSeries)
+			level.Debug(c.logger).Log("msg", "discarding", "value_type", timeSeries.ValueType, "metric", timeSeries)
 			continue
 		}
 

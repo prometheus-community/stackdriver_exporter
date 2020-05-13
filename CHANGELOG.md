@@ -1,5 +1,6 @@
 ## master / unreleased
 
+* [CHANGE] Switch logging to promlog
 * [FEATURE] Add metrics prefix collect URL param
 
 ## 0.7.0 / 2020-05-01
