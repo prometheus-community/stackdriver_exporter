@@ -16,11 +16,15 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/PuerkitoBio/rehttp"
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/log"
+	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promlog/flag"
 	"github.com/prometheus/common/version"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
@@ -90,7 +94,7 @@ func createMonitoringService() (*monitoring.Service, error) {
 	return monitoringService, nil
 }
 
-func newHandler(m *monitoring.Service) http.HandlerFunc {
+func newHandler(m *monitoring.Service, logger log.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		collectParams := r.URL.Query()["collect[]"]
 
@@ -100,9 +104,10 @@ func newHandler(m *monitoring.Service) http.HandlerFunc {
 			filters[param] = true
 		}
 
-		monitoringCollector, err := collectors.NewMonitoringCollector(m, filters)
+		monitoringCollector, err := collectors.NewMonitoringCollector(m, filters, logger)
 		if err != nil {
-			log.Fatal(err)
+			level.Error(logger).Log("err", err)
+			os.Exit(1)
 		}
 
 		registry := prometheus.NewRegistry()
@@ -119,20 +124,25 @@ func newHandler(m *monitoring.Service) http.HandlerFunc {
 }
 
 func main() {
-	log.AddFlags(kingpin.CommandLine)
+	promlogConfig := &promlog.Config{}
+	flag.AddFlags(kingpin.CommandLine, promlogConfig)
+
 	kingpin.Version(version.Print("stackdriver_exporter"))
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
-	log.Infoln("Starting stackdriver_exporter", version.Info())
-	log.Infoln("Build context", version.BuildContext())
+	logger := promlog.New(promlogConfig)
+
+	level.Info(logger).Log("msg", "Starting stackdriver_exporter", "version", version.Info())
+	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
 
 	monitoringService, err := createMonitoringService()
 	if err != nil {
-		log.Fatal(err)
+		level.Error(logger).Log("msg", "failed to create monitoring service", "err", err)
+		os.Exit(1)
 	}
 
-	handlerFunc := newHandler(monitoringService)
+	handlerFunc := newHandler(monitoringService, logger)
 
 	http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handlerFunc))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +155,9 @@ func main() {
              </html>`))
 	})
 
-	log.Infoln("Listening on", *listenAddress)
-	log.Fatal(http.ListenAndServe(*listenAddress, nil))
+	level.Info(logger).Log("msg", "Listening on", "address", *listenAddress)
+	if err := http.ListenAndServe(*listenAddress, nil); err != nil {
+		level.Error(logger).Log("err", err)
+		os.Exit(1)
+	}
 }

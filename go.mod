@@ -10,13 +10,12 @@ require (
 	github.com/benbjohnson/clock v1.0.0 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/fatih/camelcase v1.0.0
-	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
-	github.com/onsi/ginkgo v1.4.0
-	github.com/onsi/gomega v1.3.0
+	github.com/go-kit/kit v0.10.0
+	github.com/onsi/ginkgo v1.7.0
+	github.com/onsi/gomega v1.4.3
 	github.com/prometheus/client_golang v1.6.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.9.1
-	github.com/sirupsen/logrus v1.5.0 // indirect
 	golang.org/x/net v0.0.0-20200501053045-e0ff5e5a1de5
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sys v0.0.0-20200501052902-10377860bb8e // indirect
