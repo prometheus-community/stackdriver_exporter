@@ -1,7 +1,10 @@
 ## master / unreleased
 
-* [CHANGE] Switch logging to promlog
-* [FEATURE] Add metrics prefix collect URL param
+## 0.8.0 / 2020-05-13
+
+* [CHANGE] Treat failure to collect metric as fatal #83
+* [CHANGE] Switch logging to promlog #88
+* [FEATURE] Add metrics prefix collect URL param #87
 
 ## 0.7.0 / 2020-05-01
 
