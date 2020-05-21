@@ -96,9 +96,9 @@ func createMonitoringService() (*monitoring.Service, error) {
 
 func newHandler(m *monitoring.Service, logger log.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		collectParams := r.URL.Query()["collect[]"]
+		collectParams := r.URL.Query()["collect"]
 
-		// Create filters for "collect[]" query parameters.
+		// Create filters for "collect" query parameters.
 		filters := make(map[string]bool)
 		for _, param := range collectParams {
 			filters[param] = true
