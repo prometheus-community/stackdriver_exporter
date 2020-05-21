@@ -111,12 +111,12 @@ stackdriver_exporter \
 
 The `stackdriver_exporter` collects all metrics type prefixes by default.
 
-For advanced uses, the collection can be filtered by using a repeatable URL param called `collect[]`. In the Prometheus configuration you can use you can use this syntax under the [scrape config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#<scrape_config>).
+For advanced uses, the collection can be filtered by using a repeatable URL param called `collect`. In the Prometheus configuration you can use you can use this syntax under the [scrape config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#<scrape_config>).
 
 
 ```yaml
 params:
-  collect[]:
+  collect:
   - compute.googleapis.com/instance/cpu
   - compute.googleapis.com/instance/disk
 ```
