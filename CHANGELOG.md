@@ -1,6 +1,6 @@
 ## master / unreleased
 
-## 0.8.0 / 2020-05-21
+## 0.9.0 / 2020-05-26
 
 * [CHANGE] Add stackdriver timestamp to metrics #84
 * [CHANGE] Fix collect param name #91
