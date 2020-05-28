@@ -86,6 +86,7 @@ func (t *TimeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 			dist:        dist,
 			buckets:     buckets,
 			labelValues: labelValues,
+			reportTime:  reportTime,
 
 			keysHash: hashLabelKeys(labelKeys),
 		}
