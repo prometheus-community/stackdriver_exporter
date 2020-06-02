@@ -1,5 +1,9 @@
 ## master / unreleased
 
+## 0.9.1 / 2020-06-02
+
+* [BUGFIX] Fix report time missing for histogram metrics #94
+
 ## 0.9.0 / 2020-05-26
 
 * [CHANGE] Add stackdriver timestamp to metrics #84
