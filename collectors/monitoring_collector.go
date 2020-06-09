@@ -72,10 +72,6 @@ type MonitoringCollector struct {
 }
 
 func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, filters map[string]bool, logger log.Logger) (*MonitoringCollector, error) {
-	if projectID == "" {
-		return nil, errors.New("Flag `google.project-id` is required")
-	}
-
 	if *monitoringMetricsTypePrefixes == "" {
 		return nil, errors.New("Flag `monitoring.metrics-type-prefixes` is required")
 	}
