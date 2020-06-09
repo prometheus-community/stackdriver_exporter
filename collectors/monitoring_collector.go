@@ -33,10 +33,6 @@ import (
 )
 
 var (
-	projectID = kingpin.Flag(
-		"google.project-id", "Google Project ID ($STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID).",
-	).Envar("STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID").Required().String()
-
 	monitoringMetricsTypePrefixes = kingpin.Flag(
 		"monitoring.metrics-type-prefixes", "Comma separated Google Stackdriver Monitoring Metric Type prefixes ($STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES).",
 	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES").Required().String()
@@ -75,11 +71,7 @@ type MonitoringCollector struct {
 	logger                          log.Logger
 }
 
-func NewMonitoringCollector(monitoringService *monitoring.Service, filters map[string]bool, logger log.Logger) (*MonitoringCollector, error) {
-	if *projectID == "" {
-		return nil, errors.New("Flag `google.project-id` is required")
-	}
-
+func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, filters map[string]bool, logger log.Logger) (*MonitoringCollector, error) {
 	if *monitoringMetricsTypePrefixes == "" {
 		return nil, errors.New("Flag `monitoring.metrics-type-prefixes` is required")
 	}
@@ -90,7 +82,7 @@ func NewMonitoringCollector(monitoringService *monitoring.Service, filters map[s
 			Subsystem:   "monitoring",
 			Name:        "api_calls_total",
 			Help:        "Total number of Google Stackdriver Monitoring API calls made.",
-			ConstLabels: prometheus.Labels{"project_id": *projectID},
+			ConstLabels: prometheus.Labels{"project_id": projectID},
 		},
 	)
 
@@ -100,7 +92,7 @@ func NewMonitoringCollector(monitoringService *monitoring.Service, filters map[s
 			Subsystem:   "monitoring",
 			Name:        "scrapes_total",
 			Help:        "Total number of Google Stackdriver Monitoring metrics scrapes.",
-			ConstLabels: prometheus.Labels{"project_id": *projectID},
+			ConstLabels: prometheus.Labels{"project_id": projectID},
 		},
 	)
 
@@ -110,7 +102,7 @@ func NewMonitoringCollector(monitoringService *monitoring.Service, filters map[s
 			Subsystem:   "monitoring",
 			Name:        "scrape_errors_total",
 			Help:        "Total number of Google Stackdriver Monitoring metrics scrape errors.",
-			ConstLabels: prometheus.Labels{"project_id": *projectID},
+			ConstLabels: prometheus.Labels{"project_id": projectID},
 		},
 	)
 
@@ -120,7 +112,7 @@ func NewMonitoringCollector(monitoringService *monitoring.Service, filters map[s
 			Subsystem:   "monitoring",
 			Name:        "last_scrape_error",
 			Help:        "Whether the last metrics scrape from Google Stackdriver Monitoring resulted in an error (1 for error, 0 for success).",
-			ConstLabels: prometheus.Labels{"project_id": *projectID},
+			ConstLabels: prometheus.Labels{"project_id": projectID},
 		},
 	)
 
@@ -130,7 +122,7 @@ func NewMonitoringCollector(monitoringService *monitoring.Service, filters map[s
 			Subsystem:   "monitoring",
 			Name:        "last_scrape_timestamp",
 			Help:        "Number of seconds since 1970 since last metrics scrape from Google Stackdriver Monitoring.",
-			ConstLabels: prometheus.Labels{"project_id": *projectID},
+			ConstLabels: prometheus.Labels{"project_id": projectID},
 		},
 	)
 
@@ -140,7 +132,7 @@ func NewMonitoringCollector(monitoringService *monitoring.Service, filters map[s
 			Subsystem:   "monitoring",
 			Name:        "last_scrape_duration_seconds",
 			Help:        "Duration of the last metrics scrape from Google Stackdriver Monitoring.",
-			ConstLabels: prometheus.Labels{"project_id": *projectID},
+			ConstLabels: prometheus.Labels{"project_id": projectID},
 		},
 	)
 
@@ -156,7 +148,7 @@ func NewMonitoringCollector(monitoringService *monitoring.Service, filters map[s
 	}
 
 	monitoringCollector := &MonitoringCollector{
-		projectID:                       *projectID,
+		projectID:                       projectID,
 		metricsTypePrefixes:             filteredPrefixes,
 		metricsInterval:                 *monitoringMetricsInterval,
 		metricsOffset:                   *monitoringMetricsOffset,

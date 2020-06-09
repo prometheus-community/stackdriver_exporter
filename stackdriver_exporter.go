@@ -28,6 +28,7 @@ import (
 	"github.com/prometheus/common/version"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/monitoring/v3"
 	"google.golang.org/api/option"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -43,6 +44,10 @@ var (
 	metricsPath = kingpin.Flag(
 		"web.telemetry-path", "Path under which to expose Prometheus metrics ($STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH).",
 	).Envar("STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH").Default("/metrics").String()
+
+	projectID = kingpin.Flag(
+		"google.project-id", "Google Project ID ($STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID).",
+	).Envar("STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID").String()
 
 	stackdriverMaxRetries = kingpin.Flag(
 		"stackdriver.max-retries", "Max number of retries that should be attempted on 503 errors from stackdriver. ($STACKDRIVER_EXPORTER_MAX_RETRIES)",
@@ -69,9 +74,18 @@ func init() {
 	prometheus.MustRegister(version.NewCollector("stackdriver_exporter"))
 }
 
-func createMonitoringService() (*monitoring.Service, error) {
-	ctx := context.Background()
+func getDefaultGCPProject(ctx context.Context) (*string, error) {
+	credentials, err := google.FindDefaultCredentials(ctx, compute.ComputeScope)
+	if err != nil {
+		return nil, err
+	}
+	if credentials.ProjectID == "" {
+		return nil, fmt.Errorf("unable to identify the gcloud project. Got empty string")
+	}
+	return &credentials.ProjectID, nil
+}
 
+func createMonitoringService(ctx context.Context) (*monitoring.Service, error) {
 	googleClient, err := google.DefaultClient(ctx, monitoring.MonitoringReadScope)
 	if err != nil {
 		return nil, fmt.Errorf("Error creating Google client: %v", err)
@@ -94,7 +108,7 @@ func createMonitoringService() (*monitoring.Service, error) {
 	return monitoringService, nil
 }
 
-func newHandler(m *monitoring.Service, logger log.Logger) http.HandlerFunc {
+func newHandler(projectID string, m *monitoring.Service, logger log.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		collectParams := r.URL.Query()["collect"]
 
@@ -104,7 +118,7 @@ func newHandler(m *monitoring.Service, logger log.Logger) http.HandlerFunc {
 			filters[param] = true
 		}
 
-		monitoringCollector, err := collectors.NewMonitoringCollector(m, filters, logger)
+		monitoringCollector, err := collectors.NewMonitoringCollector(projectID, m, filters, logger)
 		if err != nil {
 			level.Error(logger).Log("err", err)
 			os.Exit(1)
@@ -133,16 +147,28 @@ func main() {
 
 	logger := promlog.New(promlogConfig)
 
+	ctx := context.Background()
+	if *projectID == "" {
+		level.Info(logger).Log("msg", "no projectID was provided. Trying to discover it")
+		var err error
+		projectID, err = getDefaultGCPProject(ctx)
+		if err != nil {
+			level.Error(logger).Log("msg", "no explicit projectID and error trying to discover default GCloud project", "err", err)
+			os.Exit(1)
+		}
+	}
+
 	level.Info(logger).Log("msg", "Starting stackdriver_exporter", "version", version.Info())
 	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
+	level.Info(logger).Log("msg", "Using Google Cloud Project ID", "projectID", *projectID)
 
-	monitoringService, err := createMonitoringService()
+	monitoringService, err := createMonitoringService(ctx)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create monitoring service", "err", err)
 		os.Exit(1)
 	}
 
-	handlerFunc := newHandler(monitoringService, logger)
+	handlerFunc := newHandler(*projectID, monitoringService, logger)
 
 	http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handlerFunc))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
