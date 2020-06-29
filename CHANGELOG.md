@@ -1,5 +1,9 @@
 ## master / unreleased
 
+## 0.10.0 / 2020-06-28
+
+* [FEATURE] Autodiscover Google Poject ID #62
+
 ## 0.9.1 / 2020-06-02
 
 * [BUGFIX] Fix report time missing for histogram metrics #94
