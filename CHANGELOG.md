@@ -1,5 +1,7 @@
 ## master / unreleased
 
+* [CHANGE] Do not treat failure to collect metrics as fatal
+
 ## 0.10.0 / 2020-06-28
 
 * [FEATURE] Autodiscover Google Poject ID #62
