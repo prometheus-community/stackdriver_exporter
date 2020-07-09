@@ -17,7 +17,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -184,7 +183,6 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 		errorMetric = float64(1)
 		c.scrapeErrorsTotalMetric.Inc()
 		level.Error(c.logger).Log("msg", "Error while getting Google Stackdriver Monitoring metrics", "err", err)
-		os.Exit(1)
 	}
 	c.scrapeErrorsTotalMetric.Collect(ch)
 
