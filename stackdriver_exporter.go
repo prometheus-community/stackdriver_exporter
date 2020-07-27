@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/PuerkitoBio/rehttp"
 	"github.com/go-kit/kit/log"
@@ -46,7 +47,7 @@ var (
 	).Envar("STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH").Default("/metrics").String()
 
 	projectID = kingpin.Flag(
-		"google.project-id", "Google Project ID ($STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID).",
+		"google.project-id", "Comma seperated list of Google Project IDs ($STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID).",
 	).Envar("STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID").String()
 
 	stackdriverMaxRetries = kingpin.Flag(
@@ -108,7 +109,7 @@ func createMonitoringService(ctx context.Context) (*monitoring.Service, error) {
 	return monitoringService, nil
 }
 
-func newHandler(projectID string, m *monitoring.Service, logger log.Logger) http.HandlerFunc {
+func newHandler(projectIDs []string, m *monitoring.Service, logger log.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		collectParams := r.URL.Query()["collect"]
 
@@ -118,14 +119,16 @@ func newHandler(projectID string, m *monitoring.Service, logger log.Logger) http
 			filters[param] = true
 		}
 
-		monitoringCollector, err := collectors.NewMonitoringCollector(projectID, m, filters, logger)
-		if err != nil {
-			level.Error(logger).Log("err", err)
-			os.Exit(1)
-		}
-
 		registry := prometheus.NewRegistry()
-		registry.MustRegister(monitoringCollector)
+
+		for _, project := range projectIDs {
+			monitoringCollector, err := collectors.NewMonitoringCollector(project, m, filters, logger)
+			if err != nil {
+				level.Error(logger).Log("err", err)
+				os.Exit(1)
+			}
+			registry.MustRegister(monitoringCollector)
+		}
 
 		gatherers := prometheus.Gatherers{
 			prometheus.DefaultGatherer,
@@ -168,7 +171,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	handlerFunc := newHandler(*projectID, monitoringService, logger)
+	projectIDs := strings.Split(*projectID, ",")
+	handlerFunc := newHandler(projectIDs, monitoringService, logger)
 
 	http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handlerFunc))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
