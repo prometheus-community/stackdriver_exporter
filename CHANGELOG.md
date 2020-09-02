@@ -1,6 +1,9 @@
 ## master / unreleased
 
+## 0.11.0 / 2020-09-02
+
 * [CHANGE] Do not treat failure to collect metrics as fatal #102
+* [FEATURE] Add support for multiple google project IDs #105
 
 ## 0.10.0 / 2020-06-28
 
