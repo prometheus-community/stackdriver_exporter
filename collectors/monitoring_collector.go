@@ -414,7 +414,7 @@ func (c *MonitoringCollector) generateHistogramBuckets(
 	case opts.ExplicitBuckets != nil:
 		// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TypedValue#explicit
 		bucketKeys = make([]float64, len(opts.ExplicitBuckets.Bounds)+1)
-		copy(opts.ExplicitBuckets.Bounds, bucketKeys)
+		copy(bucketKeys, opts.ExplicitBuckets.Bounds)
 	case opts.LinearBuckets != nil:
 		// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TypedValue#linear
 		// NumFiniteBuckets is inclusive so bucket count is num+2
