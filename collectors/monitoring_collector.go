@@ -150,7 +150,6 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		}
 	}
 
-
 	monitoringCollector := &MonitoringCollector{
 		projectID:                       projectID,
 		metricsTypePrefixes:             filteredPrefixes,
