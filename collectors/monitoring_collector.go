@@ -53,13 +53,13 @@ var (
 	).Envar("STACKDRIVER_EXPORTER_DROP_DELEGATED_PROJECTS").Default("false").Bool()
 
 	monitoringExtraFilters = kingpin.Flag(
-		"monitoring.extra.filter", "Extra filters. i.e: resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")").Strings()
+		"monitoring.extra.filters", "Extra filters. i.e: resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")").Default("").String()
 )
 
 type MonitoringCollector struct {
 	projectID                       string
 	metricsTypePrefixes             []string
-	monitoringExtraFilters          []string
+	monitoringExtraFilters          string
 	metricsInterval                 time.Duration
 	metricsOffset                   time.Duration
 	monitoringService               *monitoring.Service
@@ -243,10 +243,8 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 						c.projectID,
 						metricDescriptor.Type)
 				}
-				if len(c.monitoringExtraFilters) > 0 {
-					for _, extraFilter := range c.monitoringExtraFilters {
-						filter = fmt.Sprintf("%s AND %s", filter, extraFilter)
-					}
+				if *monitoringExtraFilters != ""{
+					filter = fmt.Sprintf("%s AND (%s)", filter, *monitoringExtraFilters)
 				}
 				level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
 
