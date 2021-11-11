@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -52,14 +53,14 @@ var (
 		"monitoring.drop-delegated-projects", "Drop metrics from attached projects and fetch `project_id` only ($STACKDRIVER_EXPORTER_DROP_DELEGATED_PROJECTS).",
 	).Envar("STACKDRIVER_EXPORTER_DROP_DELEGATED_PROJECTS").Default("false").Bool()
 
-	monitoringExtraFilters = kingpin.Flag(
-		"monitoring.extra.filters", "Extra filters. i.e: resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")").Default("").String()
+	monitoringExtraFilter = kingpin.Flag(
+		"monitoring.extra.filter", "Extra filters. i.e: resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")").Strings()
 )
 
 type MonitoringCollector struct {
 	projectID                       string
 	metricsTypePrefixes             []string
-	monitoringExtraFilters          string
+	monitoringExtraFilter           []string
 	metricsInterval                 time.Duration
 	metricsOffset                   time.Duration
 	monitoringService               *monitoring.Service
@@ -153,7 +154,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 	monitoringCollector := &MonitoringCollector{
 		projectID:                       projectID,
 		metricsTypePrefixes:             filteredPrefixes,
-		monitoringExtraFilters:          *monitoringExtraFilters,
+		monitoringExtraFilter:           *monitoringExtraFilter,
 		metricsInterval:                 *monitoringMetricsInterval,
 		metricsOffset:                   *monitoringMetricsOffset,
 		monitoringService:               monitoringService,
@@ -243,8 +244,20 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 						c.projectID,
 						metricDescriptor.Type)
 				}
-				if *monitoringExtraFilters != ""{
-					filter = fmt.Sprintf("%s AND (%s)", filter, *monitoringExtraFilters)
+				if len(c.monitoringExtraFilter) > 0 {
+					for _, ef := range c.monitoringExtraFilter {
+						mPrefix := strings.Split(ef, ":")
+						if len(mPrefix) == 0 {
+							continue
+						}
+						if strings.Contains(metricDescriptor.Type, mPrefix[0]) {
+							m := regexp.MustCompile(mPrefix[0])
+							extraFilter := m.ReplaceAllString(ef, "")
+							extraFilter = strings.Replace(extraFilter, ":", "", 1)
+							filter = fmt.Sprintf("%s AND (%s)", filter, extraFilter)
+							level.Debug(c.logger).Log("msg", "adding extra metrics filter", filter)
+						}
+					}
 				}
 				level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
 
