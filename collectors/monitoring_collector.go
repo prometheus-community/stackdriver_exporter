@@ -17,7 +17,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -246,16 +245,10 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				}
 				if len(c.monitoringExtraFilter) > 0 {
 					for _, ef := range c.monitoringExtraFilter {
-						mPrefix := strings.Split(ef, ":")
-						if len(mPrefix) == 0 {
-							continue
-						}
-						if strings.Contains(metricDescriptor.Type, mPrefix[0]) {
-							m := regexp.MustCompile(mPrefix[0])
-							extraFilter := m.ReplaceAllString(ef, "")
-							extraFilter = strings.Replace(extraFilter, ":", "", 1)
-							filter = fmt.Sprintf("%s AND (%s)", filter, extraFilter)
-							level.Debug(c.logger).Log("msg", "adding extra metrics filter", filter)
+						efPrefix, efModifier := utils.GetExtraFilterModifiers(ef, ":")
+						if efPrefix != "" && strings.Contains(metricDescriptor.Type, efPrefix) {
+							filter = fmt.Sprintf("%s AND (%s)", filter, efModifier)
+							level.Debug(c.logger).Log("msg", "adding extra metrics filter", "descriptor", filter)
 						}
 					}
 				}

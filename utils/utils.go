@@ -39,6 +39,15 @@ func NormalizeMetricName(metricName string) string {
 	return strings.Join(normalizedMetricName, "_")
 }
 
+func GetExtraFilterModifiers(extraFilter string, separator string) (string, string) {
+	mPrefix := strings.Split(extraFilter, separator)
+	if mPrefix[0] == extraFilter {
+		return "", ""
+	}
+	return mPrefix[0], strings.Join(mPrefix[1:], "")
+}
+
+
 func ProjectResource(projectID string) string {
 	return "projects/" + projectID
 }
