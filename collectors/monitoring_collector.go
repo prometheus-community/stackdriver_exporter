@@ -159,7 +159,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		efPrefix, efModifier := utils.GetExtraFilterModifiers(ef, ":")
 		if efPrefix != "" {
 			extraFilter := MetricExtraFilter{
-				Prefix: efPrefix,
+				Prefix:   efPrefix,
 				Modifier: efModifier,
 			}
 			extraFilters = append(extraFilters, extraFilter)
