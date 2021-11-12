@@ -53,7 +53,7 @@ var (
 	).Envar("STACKDRIVER_EXPORTER_DROP_DELEGATED_PROJECTS").Default("false").Bool()
 
 	monitoringExtraFilter = kingpin.Flag(
-		"monitoring.extra.filter", "Extra filters. i.e: pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")").Strings()
+		"monitoring.metrics-extra-filter", "Extra filters. i.e: pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")").Strings()
 )
 
 type MonitoringExtraFilter struct {
