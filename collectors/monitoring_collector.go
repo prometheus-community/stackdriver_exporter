@@ -52,11 +52,11 @@ var (
 		"monitoring.drop-delegated-projects", "Drop metrics from attached projects and fetch `project_id` only ($STACKDRIVER_EXPORTER_DROP_DELEGATED_PROJECTS).",
 	).Envar("STACKDRIVER_EXPORTER_DROP_DELEGATED_PROJECTS").Default("false").Bool()
 
-	monitoringExtraFilter = kingpin.Flag(
+	monitoringMetricsExtraFilter = kingpin.Flag(
 		"monitoring.metrics-extra-filter", "Extra filters. i.e: pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")").Strings()
 )
 
-type MonitoringExtraFilter struct {
+type MetricExtraFilter struct {
 	Prefix   string
 	Modifier string
 }
@@ -64,7 +64,7 @@ type MonitoringExtraFilter struct {
 type MonitoringCollector struct {
 	projectID                       string
 	metricsTypePrefixes             []string
-	monitoringExtraFilter           []MonitoringExtraFilter
+	metricsExtraFilters             []MetricExtraFilter
 	metricsInterval                 time.Duration
 	metricsOffset                   time.Duration
 	monitoringService               *monitoring.Service
@@ -154,11 +154,11 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 			}
 		}
 	}
-	var extraFilters []MonitoringExtraFilter
-	for _, ef := range *monitoringExtraFilter {
+	var extraFilters []MetricExtraFilter
+	for _, ef := range *monitoringMetricsExtraFilter {
 		efPrefix, efModifier := utils.GetExtraFilterModifiers(ef, ":")
 		if efPrefix != "" {
-			extraFilter := MonitoringExtraFilter{
+			extraFilter := MetricExtraFilter{
 				Prefix: efPrefix,
 				Modifier: efModifier,
 			}
@@ -169,7 +169,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 	monitoringCollector := &MonitoringCollector{
 		projectID:                       projectID,
 		metricsTypePrefixes:             filteredPrefixes,
-		monitoringExtraFilter:           extraFilters,
+		metricsExtraFilters:             extraFilters,
 		metricsInterval:                 *monitoringMetricsInterval,
 		metricsOffset:                   *monitoringMetricsOffset,
 		monitoringService:               monitoringService,
@@ -259,7 +259,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 						c.projectID,
 						metricDescriptor.Type)
 				}
-				for _, ef := range c.monitoringExtraFilter {
+				for _, ef := range c.metricsExtraFilters {
 					if strings.Contains(metricDescriptor.Type, ef.Prefix) {
 						filter = fmt.Sprintf("%s AND (%s)", filter, ef.Modifier)
 					}
