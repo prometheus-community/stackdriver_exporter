@@ -56,10 +56,15 @@ var (
 		"monitoring.extra.filter", "Extra filters. i.e: resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")").Strings()
 )
 
+type MonitoringExtraFilter struct {
+	Prefix   string
+	Modifier string
+}
+
 type MonitoringCollector struct {
 	projectID                       string
 	metricsTypePrefixes             []string
-	monitoringExtraFilter           []string
+	monitoringExtraFilter           []MonitoringExtraFilter
 	metricsInterval                 time.Duration
 	metricsOffset                   time.Duration
 	monitoringService               *monitoring.Service
@@ -149,11 +154,22 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 			}
 		}
 	}
+	var extraFilters []MonitoringExtraFilter
+	for _, ef := range *monitoringExtraFilter {
+		efPrefix, efModifier := utils.GetExtraFilterModifiers(ef, ":")
+		if efPrefix != "" {
+			extraFilter := MonitoringExtraFilter{
+				Prefix: efPrefix,
+				Modifier: efModifier,
+			}
+			extraFilters = append(extraFilters, extraFilter)
+		}
+	}
 
 	monitoringCollector := &MonitoringCollector{
 		projectID:                       projectID,
 		metricsTypePrefixes:             filteredPrefixes,
-		monitoringExtraFilter:           *monitoringExtraFilter,
+		monitoringExtraFilter:           extraFilters,
 		metricsInterval:                 *monitoringMetricsInterval,
 		metricsOffset:                   *monitoringMetricsOffset,
 		monitoringService:               monitoringService,
@@ -245,10 +261,8 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				}
 				if len(c.monitoringExtraFilter) > 0 {
 					for _, ef := range c.monitoringExtraFilter {
-						efPrefix, efModifier := utils.GetExtraFilterModifiers(ef, ":")
-						if efPrefix != "" && strings.Contains(metricDescriptor.Type, efPrefix) {
-							filter = fmt.Sprintf("%s AND (%s)", filter, efModifier)
-							level.Debug(c.logger).Log("msg", "adding extra metrics filter", "descriptor", filter)
+						if strings.Contains(metricDescriptor.Type, ef.Prefix) {
+							filter = fmt.Sprintf("%s AND (%s)", filter, ef.Modifier)
 						}
 					}
 				}

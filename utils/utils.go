@@ -47,7 +47,6 @@ func GetExtraFilterModifiers(extraFilter string, separator string) (string, stri
 	return mPrefix[0], strings.Join(mPrefix[1:], "")
 }
 
-
 func ProjectResource(projectID string) string {
 	return "projects/" + projectID
 }
