@@ -259,15 +259,13 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 						c.projectID,
 						metricDescriptor.Type)
 				}
-				if len(c.monitoringExtraFilter) > 0 {
-					for _, ef := range c.monitoringExtraFilter {
-						if strings.Contains(metricDescriptor.Type, ef.Prefix) {
-							filter = fmt.Sprintf("%s AND (%s)", filter, ef.Modifier)
-						}
+				for _, ef := range c.monitoringExtraFilter {
+					if strings.Contains(metricDescriptor.Type, ef.Prefix) {
+						filter = fmt.Sprintf("%s AND (%s)", filter, ef.Modifier)
 					}
 				}
-				level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
 
+				level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
 				timeSeriesListCall := c.monitoringService.Projects.TimeSeries.List(utils.ProjectResource(c.projectID)).
 					Filter(filter).
 					IntervalStartTime(startTime.Format(time.RFC3339Nano)).
