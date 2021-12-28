@@ -31,7 +31,6 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/monitoring/v3"
-	"google.golang.org/api/option"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
@@ -87,21 +86,7 @@ func getDefaultGCPProject(ctx context.Context) (*string, error) {
 }
 
 func createMonitoringService(ctx context.Context) (*monitoring.Service, error) {
-	googleClient, err := google.DefaultClient(ctx, monitoring.MonitoringReadScope)
-	if err != nil {
-		return nil, fmt.Errorf("Error creating Google client: %v", err)
-	}
-
-	googleClient.Timeout = *stackdriverHttpTimeout
-	googleClient.Transport = rehttp.NewTransport(
-		googleClient.Transport, // need to wrap DefaultClient transport
-		rehttp.RetryAll(
-			rehttp.RetryMaxRetries(*stackdriverMaxRetries),
-			rehttp.RetryStatuses(*stackdriverRetryStatuses...)), // Cloud support suggests retrying on 503 errors
-		rehttp.ExpJitterDelay(*stackdriverBackoffJitterBase, *stackdriverMaxBackoffDuration), // Set timeout to <10s as that is prom default timeout
-	)
-
-	monitoringService, err := monitoring.NewService(ctx, option.WithHTTPClient(googleClient))
+	monitoringService, err := monitoring.NewService(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Error creating Google Stackdriver Monitoring service: %v", err)
 	}
