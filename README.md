@@ -62,7 +62,7 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 ### Flags
 
 | Flag / Environment Variable | Required | Default | Description |
-| -------- | -------- | ------- | ----------- |
+| --------------------------- | -------- | ------- | ----------- |
 | `google.project-id`<br />`STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID` | No | GCloud SDK autodiscovery | Comma seperated list of Google Project IDs |
 | `monitoring.metrics-type-prefixes`<br />`STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES` | Yes | | Comma separated Google Stackdriver Monitoring Metric Type prefixes (see [example][metrics-prefix-example] and [available metrics][metrics-list]) |
 | `monitoring.metrics-interval`<br />`STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL` | No | `5m` | Metric's timestamp interval to request from the Google Stackdriver Monitoring Metrics API. Only the most recent data point is used |
