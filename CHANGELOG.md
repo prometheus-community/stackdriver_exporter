@@ -1,5 +1,11 @@
 ## master / unreleased
 
+Breaking Changes:
+
+The exporter nolonger supports configuration via ENV vars. This was a non-standard feature that is not part of the Prometheus ecossystem. All configuration is now handled by the existing command line arguments.
+
+* [CHANGE] Cleanup non-standard ENV var setup #142
+
 ## 0.11.0 / 2020-09-02
 
 * [CHANGE] Do not treat failure to collect metrics as fatal #102

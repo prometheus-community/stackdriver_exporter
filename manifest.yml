@@ -1,9 +1,0 @@
----
-applications:
-  - name: stackdriver-exporter
-    buildpack: go_buildpack
-    env:
-      GOPACKAGENAME: github.com/prometheus-community/stackdriver_exporter
-      GOOGLE_APPLICATION_CREDENTIALS: "The file location that defines your Google Credentials"
-      STACKDRIVER_EXPORTER_GOOGLE_PROJECT_ID: "Your Google Project ID"
-      STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIX: "The desired Google Stackdriver Monitoring Metrics Type prefix"
