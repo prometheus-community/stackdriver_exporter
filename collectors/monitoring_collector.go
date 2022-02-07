@@ -45,8 +45,8 @@ var (
 	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_OFFSET").Default("0s").Duration()
 
 	monitoringMetricsIngestDelay = kingpin.Flag(
-		"monitoring.metrics-ingest-delay", "Offset for the Google Stackdriver Monitoring Metrics interval into the past by the ingest delay from the metric's metadata ($STACKDRIVER_EXPORTER_MONITORING_METRICS_INGEST_DELAY).",
-	).Envar("STACKDRIVER_EXPORTER_MONITORING_METRICS_INGEST_DELAY").Default("false").Bool()
+		"monitoring.metrics-ingest-delay", "Offset for the Google Stackdriver Monitoring Metrics interval into the past by the ingest delay from the metric's metadata.",
+	).Default("false").Bool()
 
 	collectorFillMissingLabels = kingpin.Flag(
 		"collector.fill-missing-labels", "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure ($STACKDRIVER_EXPORTER_COLLECTOR_FILL_MISSING_LABELS).",
