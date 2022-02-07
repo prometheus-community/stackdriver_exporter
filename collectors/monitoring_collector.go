@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
 	"google.golang.org/api/monitoring/v3"
@@ -55,11 +55,20 @@ var (
 	monitoringDropDelegatedProjects = kingpin.Flag(
 		"monitoring.drop-delegated-projects", "Drop metrics from attached projects and fetch `project_id` only ($STACKDRIVER_EXPORTER_DROP_DELEGATED_PROJECTS).",
 	).Envar("STACKDRIVER_EXPORTER_DROP_DELEGATED_PROJECTS").Default("false").Bool()
+
+	monitoringMetricsExtraFilter = kingpin.Flag(
+		"monitoring.filters", "Filters. i.e: pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")").Strings()
 )
+
+type MetricFilter struct {
+	Prefix   string
+	Modifier string
+}
 
 type MonitoringCollector struct {
 	projectID                       string
 	metricsTypePrefixes             []string
+	metricsFilters                  []MetricFilter
 	metricsInterval                 time.Duration
 	metricsOffset                   time.Duration
 	metricsIngestDelay              bool
@@ -150,10 +159,22 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 			}
 		}
 	}
+	var extraFilters []MetricFilter
+	for _, ef := range *monitoringMetricsExtraFilter {
+		efPrefix, efModifier := utils.GetExtraFilterModifiers(ef, ":")
+		if efPrefix != "" {
+			extraFilter := MetricFilter{
+				Prefix:   efPrefix,
+				Modifier: efModifier,
+			}
+			extraFilters = append(extraFilters, extraFilter)
+		}
+	}
 
 	monitoringCollector := &MonitoringCollector{
 		projectID:                       projectID,
 		metricsTypePrefixes:             filteredPrefixes,
+		metricsFilters:                  extraFilters,
 		metricsInterval:                 *monitoringMetricsInterval,
 		metricsOffset:                   *monitoringMetricsOffset,
 		metricsIngestDelay:              *monitoringMetricsIngestDelay,
@@ -259,6 +280,14 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					endTime.Add(ingestDelayDuration)
 					startTime.Add(ingestDelayDuration)
 				}
+
+				for _, ef := range c.metricsFilters {
+					if strings.Contains(metricDescriptor.Type, ef.Prefix) {
+						filter = fmt.Sprintf("%s AND (%s)", filter, ef.Modifier)
+					}
+				}
+
+				level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
 
 				timeSeriesListCall := c.monitoringService.Projects.TimeSeries.List(utils.ProjectResource(c.projectID)).
 					Filter(filter).

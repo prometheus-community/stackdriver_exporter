@@ -55,7 +55,7 @@ This exporter can be deployed using the [Prometheus BOSH Release][prometheus-bos
 
 The Google Stackdriver Exporter uses the Google Golang Client Library, which offers a variety of ways to provide credentials. Please refer to the [Google Application Default Credentials][application-default-credentials] documentation to see how the credentials can be provided.
 
-If you are using IAM roles, the `monitoring.metricDescriptors.list` and `monitoring.timeSeries.list` IAM permissions are required. The `roles/monitoring.viewer` IAM role contains those permissions. See the [Access Control Guide][access-control] for more information.
+If you are using IAM roles, the `roles/monitoring.viewer` IAM role contains the required permissions. See the [Access Control Guide][access-control] for more information.
 
 If you are still using the legacy [Access scopes][access-scopes], the `https://www.googleapis.com/auth/monitoring.read` scope is required.
 
@@ -67,6 +67,7 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 | `monitoring.metrics-type-prefixes`<br />`STACKDRIVER_EXPORTER_MONITORING_METRICS_TYPE_PREFIXES` | Yes | | Comma separated Google Stackdriver Monitoring Metric Type prefixes (see [example][metrics-prefix-example] and [available metrics][metrics-list]) |
 | `monitoring.metrics-interval`<br />`STACKDRIVER_EXPORTER_MONITORING_METRICS_INTERVAL` | No | `5m` | Metric's timestamp interval to request from the Google Stackdriver Monitoring Metrics API. Only the most recent data point is used |
 | `monitoring.metrics-offset`<br />`STACKDRIVER_EXPORTER_MONITORING_METRICS_OFFSET` | No | `0s` | Offset (into the past) for the metric's timestamp interval to request from the Google Stackdriver Monitoring Metrics API, to handle latency in published metrics |
+| `monitoring.filters`| No | Empty list | Formatted string to allow filtering on certain metrics type |
 | `web.listen-address`<br />`STACKDRIVER_EXPORTER_WEB_LISTEN_ADDRESS` | No | `:9255` | Address to listen on for web interface and telemetry |
 | `web.telemetry-path`<br />`STACKDRIVER_EXPORTER_WEB_TELEMETRY_PATH` | No | `/metrics` | Path under which to expose Prometheus metrics |
 
@@ -105,6 +106,15 @@ If we want to get all `CPU` (`compute.googleapis.com/instance/cpu`) and `Disk` (
 stackdriver_exporter \
   --google.project-id my-test-project \
   --monitoring.metrics-type-prefixes "compute.googleapis.com/instance/cpu,compute.googleapis.com/instance/disk"
+```
+
+Using extra filters:
+
+```
+stackdriver_exporter \
+ --google.project-id my-test-project \
+ --monitoring.metrics-type-prefixes='pubsub.googleapis.com/subscription' \
+ --monitoring.metrics-extra-filter='pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match("us-west4.*my-team-subs.*")'
 ```
 
 ## Filtering enabled collectors
