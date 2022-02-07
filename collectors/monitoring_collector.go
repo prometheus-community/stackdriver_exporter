@@ -44,6 +44,10 @@ var (
 		"monitoring.metrics-offset", "Offset for the Google Stackdriver Monitoring Metrics interval into the past.",
 	).Default("0s").Duration()
 
+	monitoringMetricsIngestDelay = kingpin.Flag(
+		"monitoring.metrics-ingest-delay", "Offset for the Google Stackdriver Monitoring Metrics interval into the past by the ingest delay from the metric's metadata.",
+	).Default("false").Bool()
+
 	collectorFillMissingLabels = kingpin.Flag(
 		"collector.fill-missing-labels", "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure.",
 	).Default("true").Bool()
@@ -67,6 +71,7 @@ type MonitoringCollector struct {
 	metricsFilters                  []MetricFilter
 	metricsInterval                 time.Duration
 	metricsOffset                   time.Duration
+	metricsIngestDelay              bool
 	monitoringService               *monitoring.Service
 	apiCallsTotalMetric             prometheus.Counter
 	scrapesTotalMetric              prometheus.Counter
@@ -172,6 +177,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		metricsFilters:                  extraFilters,
 		metricsInterval:                 *monitoringMetricsInterval,
 		metricsOffset:                   *monitoringMetricsOffset,
+		metricsIngestDelay:              *monitoringMetricsIngestDelay,
 		monitoringService:               monitoringService,
 		apiCallsTotalMetric:             apiCallsTotalMetric,
 		scrapesTotalMetric:              scrapesTotalMetric,
@@ -259,6 +265,22 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 						c.projectID,
 						metricDescriptor.Type)
 				}
+
+				if c.metricsIngestDelay &&
+					metricDescriptor.Metadata != nil &&
+					metricDescriptor.Metadata.IngestDelay != "" {
+					ingestDelay := metricDescriptor.Metadata.IngestDelay
+					ingestDelayDuration, err := time.ParseDuration(ingestDelay)
+					if err != nil {
+						level.Error(c.logger).Log("msg", "error parsing ingest delay from metric metadata", "descriptor", metricDescriptor.Type, "err", err, "delay", ingestDelay)
+						errChannel <- err
+						return
+					}
+					level.Debug(c.logger).Log("msg", "adding ingest delay", "descriptor", metricDescriptor.Type, "delay", ingestDelay)
+					endTime.Add(ingestDelayDuration)
+					startTime.Add(ingestDelayDuration)
+				}
+
 				for _, ef := range c.metricsFilters {
 					if strings.Contains(metricDescriptor.Type, ef.Prefix) {
 						filter = fmt.Sprintf("%s AND (%s)", filter, ef.Modifier)
@@ -266,6 +288,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				}
 
 				level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
+
 				timeSeriesListCall := c.monitoringService.Projects.TimeSeries.List(utils.ProjectResource(c.projectID)).
 					Filter(filter).
 					IntervalStartTime(startTime.Format(time.RFC3339Nano)).
