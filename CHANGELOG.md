@@ -1,11 +1,15 @@
 ## master / unreleased
-* [FEATURE] Add support to include ingest delay when pull metrics #129
+
+## 0.12.0 / 2022-02-08
 
 Breaking Changes:
 
 The exporter nolonger supports configuration via ENV vars. This was a non-standard feature that is not part of the Prometheus ecossystem. All configuration is now handled by the existing command line arguments.
 
 * [CHANGE] Cleanup non-standard ENV var setup #142
+* [FEATURE] Add support to include ingest delay when pull metrics #129
+* [FEATURE] Add monitoring.filters flag #133
+* [ENHANCEMENT] Setup exporter metrics only once when we can #124
 
 ## 0.11.0 / 2020-09-02
 
