@@ -70,6 +70,7 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 | `monitoring.filters`              | No       |         | Formatted string to allow filtering on certain metrics type |
 | `web.listen-address`              | No       | `:9255` | Address to listen on for web interface and telemetry |
 | `web.telemetry-path`              | No       | `/metrics` | Path under which to expose Prometheus metrics |
+| `monitoring.metrics-ingest-delay` | No       |         | Offsets metric collection by a delay appropriate for each metric type, e.g. because bigquery metrics are slow to appear |
 
 ### Metrics
 
