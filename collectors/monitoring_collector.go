@@ -266,11 +266,6 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 						metricDescriptor.Type)
 				}
 
-				if metricDescriptor.DisplayName == "Stored bytes" {
-					fmt.Printf("\n start pre \n %+v \n\n\n\n", startTime.Format(time.RFC3339Nano))
-					fmt.Printf("\n\n end pre \n %+v \n\n\n\n", endTime.Format(time.RFC3339Nano))
-				}
-
 				if c.metricsIngestDelay &&
 					metricDescriptor.Metadata != nil &&
 					metricDescriptor.Metadata.IngestDelay != "" {
@@ -286,10 +281,6 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					startTime = startTime.Add(ingestDelayDuration * -1)
 				}
 
-				if metricDescriptor.DisplayName == "Stored bytes" {
-					fmt.Printf("\n start post \n %+v \n\n\n\n", startTime.Format(time.RFC3339Nano))
-					fmt.Printf("\n\n end post \n %+v \n\n\n\n", endTime.Format(time.RFC3339Nano))
-				}
 				for _, ef := range c.metricsFilters {
 					if strings.Contains(metricDescriptor.Type, ef.Prefix) {
 						filter = fmt.Sprintf("%s AND (%s)", filter, ef.Modifier)
@@ -365,7 +356,6 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 }
 
 func (c *MonitoringCollector) reportTimeSeriesMetrics(
-
 	page *monitoring.ListTimeSeriesResponse,
 	metricDescriptor *monitoring.MetricDescriptor,
 	ch chan<- prometheus.Metric,
