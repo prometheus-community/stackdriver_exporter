@@ -389,15 +389,19 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 		// Add the metric labels
 		// @see https://cloud.google.com/monitoring/api/metrics
 		for key, value := range timeSeries.Metric.Labels {
-			labelKeys = append(labelKeys, key)
-			labelValues = append(labelValues, value)
+			if !c.keyExists(labelKeys, key) {
+				labelKeys = append(labelKeys, key)
+				labelValues = append(labelValues, value)
+			}
 		}
 
 		// Add the monitored resource labels
 		// @see https://cloud.google.com/monitoring/api/resources
 		for key, value := range timeSeries.Resource.Labels {
-			labelKeys = append(labelKeys, key)
-			labelValues = append(labelValues, value)
+			if !c.keyExists(labelKeys, key) {
+				labelKeys = append(labelKeys, key)
+				labelValues = append(labelValues, value)
+			}
 		}
 
 		if c.monitoringDropDelegatedProjects {
@@ -505,4 +509,14 @@ func (c *MonitoringCollector) generateHistogramBuckets(
 		}
 	}
 	return buckets, nil
+}
+
+func (c *MonitoringCollector) keyExists(labelKeys []string, key string) bool {
+	for _, item := range labelKeys {
+		if item == key {
+			level.Debug(c.logger).Log("msg", "Found duplicate label key", "key", key)
+			return true
+		}
+	}
+	return false
 }
