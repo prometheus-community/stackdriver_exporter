@@ -1,12 +1,12 @@
 ---
 issues:
   exclude-rules:
-  - path: _test.go
-    linters:
-    - errcheck
-  - path: utils/test_matchers
-    linters:
-    - errcheck
+    - path: _test.go
+      linters:
+        - errcheck
+    - path: utils/test_matchers
+      linters:
+        - errcheck
 
 linters-settings:
   errcheck:
