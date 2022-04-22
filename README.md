@@ -114,7 +114,7 @@ Using extra filters:
 stackdriver_exporter \
  --google.project-id my-test-project \
  --monitoring.metrics-type-prefixes='pubsub.googleapis.com/subscription' \
- --monitoring.metrics-extra-filter='pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match("us-west4.*my-team-subs.*")'
+ --monitoring.filters='pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match("us-west4.*my-team-subs.*")'
 ```
 
 ## Filtering enabled collectors
