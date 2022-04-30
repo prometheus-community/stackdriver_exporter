@@ -277,8 +277,8 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 						return
 					}
 					level.Debug(c.logger).Log("msg", "adding ingest delay", "descriptor", metricDescriptor.Type, "delay", ingestDelay)
-					endTime.Add(ingestDelayDuration)
-					startTime.Add(ingestDelayDuration)
+					endTime = endTime.Add(ingestDelayDuration * -1)
+					startTime = startTime.Add(ingestDelayDuration * -1)
 				}
 
 				for _, ef := range c.metricsFilters {
