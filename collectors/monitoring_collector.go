@@ -55,7 +55,10 @@ type MonitoringCollector struct {
 }
 
 type MonitoringCollectorOptions struct {
-	MetricTypePrefixes    []string
+	// MetricTypePrefixes are the Google Monitoring (ex-Stackdriver) prefixes metric type prefixes that the collector
+	// will be querying.
+	MetricTypePrefixes []string
+	// ExtraFilters
 	ExtraFilters          []string
 	RequestInterval       time.Duration
 	RequestOffset         time.Duration
