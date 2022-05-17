@@ -37,40 +37,6 @@ import (
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
 )
 
-var (
-	listenAddress = kingpin.Flag(
-		"web.listen-address", "Address to listen on for web interface and telemetry.",
-	).Default(":9255").String()
-
-	metricsPath = kingpin.Flag(
-		"web.telemetry-path", "Path under which to expose Prometheus metrics.",
-	).Default("/metrics").String()
-
-	projectID = kingpin.Flag(
-		"google.project-id", "Comma seperated list of Google Project IDs.",
-	).String()
-
-	stackdriverMaxRetries = kingpin.Flag(
-		"stackdriver.max-retries", "Max number of retries that should be attempted on 503 errors from stackdriver.",
-	).Default("0").Int()
-
-	stackdriverHttpTimeout = kingpin.Flag(
-		"stackdriver.http-timeout", "How long should stackdriver_exporter wait for a result from the Stackdriver API.",
-	).Default("10s").Duration()
-
-	stackdriverMaxBackoffDuration = kingpin.Flag(
-		"stackdriver.max-backoff", "Max time between each request in an exp backoff scenario.",
-	).Default("5s").Duration()
-
-	stackdriverBackoffJitterBase = kingpin.Flag(
-		"stackdriver.backoff-jitter", "The amount of jitter to introduce in a exp backoff scenario.",
-	).Default("1s").Duration()
-
-	stackdriverRetryStatuses = kingpin.Flag(
-		"stackdriver.retry-statuses", "The HTTP statuses that should trigger a retry.",
-	).Default("503").Ints()
-)
-
 func init() {
 	prometheus.MustRegister(version.NewCollector("stackdriver_exporter"))
 }
@@ -146,8 +112,26 @@ func newHandler(projectIDs []string, m *monitoring.Service, logger log.Logger) *
 func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 	registry := prometheus.NewRegistry()
 
+	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
+	filteredPrefixes := metricsTypePrefixes
+	if len(filters) > 0 {
+		filteredPrefixes = nil
+		for _, prefix := range metricsTypePrefixes {
+			if filters[prefix] {
+				filteredPrefixes = append(filteredPrefixes, prefix)
+			}
+		}
+	}
 	for _, project := range h.projectIDs {
-		monitoringCollector, err := collectors.NewMonitoringCollector(project, h.m, filters, h.logger)
+		monitoringCollector, err := collectors.NewMonitoringCollector(project, h.m, collectors.MonitoringCollectorOptions{
+			MetricTypePrefixes:    filteredPrefixes,
+			ExtraFilters:          *monitoringMetricsExtraFilter,
+			RequestInterval:       *monitoringMetricsInterval,
+			RequestOffset:         *monitoringMetricsOffset,
+			IngestDelay:           *monitoringMetricsIngestDelay,
+			FillMissingLabels:     *collectorFillMissingLabels,
+			DropDelegatedProjects: *monitoringDropDelegatedProjects,
+		}, filters, h.logger)
 		if err != nil {
 			level.Error(h.logger).Log("err", err)
 			os.Exit(1)
