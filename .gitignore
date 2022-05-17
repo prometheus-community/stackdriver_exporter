@@ -6,3 +6,6 @@
 *.test
 *-stamp
 /vendor
+
+# IDE Specific ignores
+/.idea
