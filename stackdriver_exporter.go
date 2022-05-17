@@ -15,6 +15,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/prometheus-community/stackdriver_exporter/utils"
 	"net/http"
 	"os"
 	"strings"
@@ -79,9 +80,10 @@ type handler struct {
 	handler http.Handler
 	logger  log.Logger
 
-	projectIDs      []string
-	metricsPrefixes []string
-	m               *monitoring.Service
+	projectIDs          []string
+	metricsPrefixes     []string
+	metricsExtraFilters []collectors.MetricFilter
+	m                   *monitoring.Service
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -99,12 +101,13 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-func newHandler(projectIDs []string, metricPrefixes []string, m *monitoring.Service, logger log.Logger) *handler {
+func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters []collectors.MetricFilter, m *monitoring.Service, logger log.Logger) *handler {
 	h := &handler{
-		logger:          logger,
-		projectIDs:      projectIDs,
-		metricsPrefixes: metricPrefixes,
-		m:               m,
+		logger:              logger,
+		projectIDs:          projectIDs,
+		metricsPrefixes:     metricPrefixes,
+		metricsExtraFilters: metricExtraFilters,
+		m:                   m,
 	}
 
 	h.handler = h.innerHandler(nil)
@@ -117,7 +120,7 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 	for _, project := range h.projectIDs {
 		monitoringCollector, err := collectors.NewMonitoringCollector(project, h.m, collectors.MonitoringCollectorOptions{
 			MetricTypePrefixes:    h.filterMetricTypePrefixes(filters),
-			ExtraFilters:          *monitoringMetricsExtraFilter,
+			ExtraFilters:          h.metricsExtraFilters,
 			RequestInterval:       *monitoringMetricsInterval,
 			RequestOffset:         *monitoringMetricsOffset,
 			IngestDelay:           *monitoringMetricsIngestDelay,
@@ -188,7 +191,8 @@ func main() {
 
 	projectIDs := strings.Split(*projectID, ",")
 	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
-	handler := newHandler(projectIDs, metricsTypePrefixes, monitoringService, logger)
+	metricExtraFilters := parseMetricExtraFilters()
+	handler := newHandler(projectIDs, metricsTypePrefixes, metricExtraFilters, monitoringService, logger)
 
 	http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -206,4 +210,19 @@ func main() {
 		level.Error(logger).Log("err", err)
 		os.Exit(1)
 	}
+}
+
+func parseMetricExtraFilters() []collectors.MetricFilter {
+	var extraFilters []collectors.MetricFilter
+	for _, ef := range *monitoringMetricsExtraFilter {
+		efPrefix, efModifier := utils.GetExtraFilterModifiers(ef, ":")
+		if efPrefix != "" {
+			extraFilter := collectors.MetricFilter{
+				Prefix:   efPrefix,
+				Modifier: efModifier,
+			}
+			extraFilters = append(extraFilters, extraFilter)
+		}
+	}
+	return extraFilters
 }

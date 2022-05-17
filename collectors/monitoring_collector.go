@@ -58,12 +58,20 @@ type MonitoringCollectorOptions struct {
 	// MetricTypePrefixes are the Google Monitoring (ex-Stackdriver) prefixes metric type prefixes that the collector
 	// will be querying.
 	MetricTypePrefixes []string
-	// ExtraFilters
-	ExtraFilters          []string
-	RequestInterval       time.Duration
-	RequestOffset         time.Duration
-	IngestDelay           bool
-	FillMissingLabels     bool
+	// ExtraFilters is a list of extra filters to apply to each corresponding metric prefix query. If one or more are
+	// applicable to a given metric type prefix, they will be 'AND' concatenated.
+	ExtraFilters []MetricFilter
+	// RequestInterval is the time interval used in each request to get metrics. If there are many data points returned
+	// in during this interval, only the latest will be reported.
+	RequestInterval time.Duration
+	// RequestOffset is used to offset the requested interval into the past.
+	RequestOffset time.Duration
+	// IngestDelay decides if the ingestion delay specified in the metrics metadata is used when calculating the
+	// request time interval.
+	IngestDelay bool
+	// FillMissingLabels decides if empty labels should be filled with an empty string.
+	FillMissingLabels bool
+	// DropDelegatedProjects decides if only metrics matching the collector's projectID should be retrieved.
 	DropDelegatedProjects bool
 }
 
@@ -128,22 +136,10 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		},
 	)
 
-	var extraFilters []MetricFilter
-	for _, ef := range opts.ExtraFilters {
-		efPrefix, efModifier := utils.GetExtraFilterModifiers(ef, ":")
-		if efPrefix != "" {
-			extraFilter := MetricFilter{
-				Prefix:   efPrefix,
-				Modifier: efModifier,
-			}
-			extraFilters = append(extraFilters, extraFilter)
-		}
-	}
-
 	monitoringCollector := &MonitoringCollector{
 		projectID:                       projectID,
 		metricsTypePrefixes:             opts.MetricTypePrefixes,
-		metricsFilters:                  extraFilters,
+		metricsFilters:                  opts.ExtraFilters,
 		metricsInterval:                 opts.RequestInterval,
 		metricsOffset:                   opts.RequestOffset,
 		metricsIngestDelay:              opts.IngestDelay,
