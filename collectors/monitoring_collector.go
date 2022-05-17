@@ -23,13 +23,12 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
-	"github.com/prometheus-community/stackdriver_exporter/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
 	"google.golang.org/api/monitoring/v3"
-)
 
-var ()
+	"github.com/prometheus-community/stackdriver_exporter/utils"
+)
 
 type MetricFilter struct {
 	Prefix   string
@@ -65,7 +64,7 @@ type MonitoringCollectorOptions struct {
 	DropDelegatedProjects bool
 }
 
-func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, filters map[string]bool, logger log.Logger) (*MonitoringCollector, error) {
+func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger) (*MonitoringCollector, error) {
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace:   "stackdriver",

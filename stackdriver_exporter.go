@@ -79,8 +79,9 @@ type handler struct {
 	handler http.Handler
 	logger  log.Logger
 
-	projectIDs []string
-	m          *monitoring.Service
+	projectIDs      []string
+	metricsPrefixes []string
+	m               *monitoring.Service
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -98,11 +99,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-func newHandler(projectIDs []string, m *monitoring.Service, logger log.Logger) *handler {
+func newHandler(projectIDs []string, metricPrefixes []string, m *monitoring.Service, logger log.Logger) *handler {
 	h := &handler{
-		logger:     logger,
-		projectIDs: projectIDs,
-		m:          m,
+		logger:          logger,
+		projectIDs:      projectIDs,
+		metricsPrefixes: metricPrefixes,
+		m:               m,
 	}
 
 	h.handler = h.innerHandler(nil)
@@ -112,26 +114,16 @@ func newHandler(projectIDs []string, m *monitoring.Service, logger log.Logger) *
 func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 	registry := prometheus.NewRegistry()
 
-	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
-	filteredPrefixes := metricsTypePrefixes
-	if len(filters) > 0 {
-		filteredPrefixes = nil
-		for _, prefix := range metricsTypePrefixes {
-			if filters[prefix] {
-				filteredPrefixes = append(filteredPrefixes, prefix)
-			}
-		}
-	}
 	for _, project := range h.projectIDs {
 		monitoringCollector, err := collectors.NewMonitoringCollector(project, h.m, collectors.MonitoringCollectorOptions{
-			MetricTypePrefixes:    filteredPrefixes,
+			MetricTypePrefixes:    h.filterMetricTypePrefixes(filters),
 			ExtraFilters:          *monitoringMetricsExtraFilter,
 			RequestInterval:       *monitoringMetricsInterval,
 			RequestOffset:         *monitoringMetricsOffset,
 			IngestDelay:           *monitoringMetricsIngestDelay,
 			FillMissingLabels:     *collectorFillMissingLabels,
 			DropDelegatedProjects: *monitoringDropDelegatedProjects,
-		}, filters, h.logger)
+		}, h.logger)
 		if err != nil {
 			level.Error(h.logger).Log("err", err)
 			os.Exit(1)
@@ -146,6 +138,21 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 
 	// Delegate http serving to Prometheus client library, which will call collector.Collect.
 	return promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{})
+}
+
+// filterMetricTypePrefixes filters the initial list of metric type prefixes, with the ones coming from an individual
+// prometheus collect request.
+func (h *handler) filterMetricTypePrefixes(filters map[string]bool) []string {
+	filteredPrefixes := h.metricsPrefixes
+	if len(filters) > 0 {
+		filteredPrefixes = nil
+		for _, prefix := range h.metricsPrefixes {
+			if filters[prefix] {
+				filteredPrefixes = append(filteredPrefixes, prefix)
+			}
+		}
+	}
+	return filteredPrefixes
 }
 
 func main() {
@@ -180,7 +187,8 @@ func main() {
 	}
 
 	projectIDs := strings.Split(*projectID, ",")
-	handler := newHandler(projectIDs, monitoringService, logger)
+	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
+	handler := newHandler(projectIDs, metricsTypePrefixes, monitoringService, logger)
 
 	http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
