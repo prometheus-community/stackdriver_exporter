@@ -69,7 +69,7 @@ type MonitoringCollectorOptions struct {
 	// IngestDelay decides if the ingestion delay specified in the metrics metadata is used when calculating the
 	// request time interval.
 	IngestDelay bool
-	// FillMissingLabels decides if empty labels should be filled with an empty string.
+	// FillMissingLabels decides if metric labels should be added with empty string to prevent failures due to label inconsistency on metrics.
 	FillMissingLabels bool
 	// DropDelegatedProjects decides if only metrics matching the collector's projectID should be retrieved.
 	DropDelegatedProjects bool
