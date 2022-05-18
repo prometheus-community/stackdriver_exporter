@@ -58,7 +58,7 @@ type MonitoringCollectorOptions struct {
 	// MetricTypePrefixes are the Google Monitoring (ex-Stackdriver) metric type prefixes that the collector
 	// will be querying.
 	MetricTypePrefixes []string
-	// ExtraFilters is a list of extra filters to apply to each corresponding metric prefix query. If one or more are
+	// ExtraFilters is a list of criteria to apply to each corresponding metric prefix query. If one or more are
 	// applicable to a given metric type prefix, they will be 'AND' concatenated.
 	ExtraFilters []MetricFilter
 	// RequestInterval is the time interval used in each request to get metrics. If there are many data points returned
