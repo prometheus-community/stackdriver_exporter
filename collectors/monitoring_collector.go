@@ -62,7 +62,7 @@ type MonitoringCollectorOptions struct {
 	// applicable to a given metric type prefix, they will be 'AND' concatenated.
 	ExtraFilters []MetricFilter
 	// RequestInterval is the time interval used in each request to get metrics. If there are many data points returned
-	// in during this interval, only the latest will be reported.
+	// during this interval, only the latest will be reported.
 	RequestInterval time.Duration
 	// RequestOffset is used to offset the requested interval into the past.
 	RequestOffset time.Duration
