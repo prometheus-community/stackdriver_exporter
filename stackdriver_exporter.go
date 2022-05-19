@@ -15,7 +15,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/prometheus-community/stackdriver_exporter/utils"
 	"net/http"
 	"os"
 	"strings"
@@ -36,6 +35,7 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
+	"github.com/prometheus-community/stackdriver_exporter/utils"
 )
 
 var (
