@@ -255,7 +255,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 
 		for _, metricDescriptor := range uniqueDescriptors {
 			wg.Add(1)
-			go func(metricDescriptor *monitoring.MetricDescriptor, ch chan<- prometheus.Metric) {
+			go func(metricDescriptor *monitoring.MetricDescriptor, ch chan<- prometheus.Metric, startTime, endTime time.Time) {
 				defer wg.Done()
 				level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics for descriptor", "descriptor", metricDescriptor.Type)
 				filter := fmt.Sprintf("metric.type=\"%s\"", metricDescriptor.Type)
@@ -315,7 +315,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					}
 					timeSeriesListCall.PageToken(page.NextPageToken)
 				}
-			}(metricDescriptor, ch)
+			}(metricDescriptor, ch, startTime, endTime)
 		}
 
 		wg.Wait()
