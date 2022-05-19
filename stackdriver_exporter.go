@@ -35,9 +35,12 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
+	"github.com/prometheus-community/stackdriver_exporter/utils"
 )
 
 var (
+	// General exporter flags
+
 	listenAddress = kingpin.Flag(
 		"web.listen-address", "Address to listen on for web interface and telemetry.",
 	).Default(":9255").String()
@@ -69,6 +72,35 @@ var (
 	stackdriverRetryStatuses = kingpin.Flag(
 		"stackdriver.retry-statuses", "The HTTP statuses that should trigger a retry.",
 	).Default("503").Ints()
+
+	// Monitoring collector flags
+
+	monitoringMetricsTypePrefixes = kingpin.Flag(
+		"monitoring.metrics-type-prefixes", "Comma separated Google Stackdriver Monitoring Metric Type prefixes.",
+	).Required().String()
+
+	monitoringMetricsInterval = kingpin.Flag(
+		"monitoring.metrics-interval", "Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used.",
+	).Default("5m").Duration()
+
+	monitoringMetricsOffset = kingpin.Flag(
+		"monitoring.metrics-offset", "Offset for the Google Stackdriver Monitoring Metrics interval into the past.",
+	).Default("0s").Duration()
+
+	monitoringMetricsIngestDelay = kingpin.Flag(
+		"monitoring.metrics-ingest-delay", "Offset for the Google Stackdriver Monitoring Metrics interval into the past by the ingest delay from the metric's metadata.",
+	).Default("false").Bool()
+
+	collectorFillMissingLabels = kingpin.Flag(
+		"collector.fill-missing-labels", "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure.",
+	).Default("true").Bool()
+
+	monitoringDropDelegatedProjects = kingpin.Flag(
+		"monitoring.drop-delegated-projects", "Drop metrics from attached projects and fetch `project_id` only.",
+	).Default("false").Bool()
+
+	monitoringMetricsExtraFilter = kingpin.Flag(
+		"monitoring.filters", "Filters. i.e: pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")").Strings()
 )
 
 func init() {
@@ -113,8 +145,10 @@ type handler struct {
 	handler http.Handler
 	logger  log.Logger
 
-	projectIDs []string
-	m          *monitoring.Service
+	projectIDs          []string
+	metricsPrefixes     []string
+	metricsExtraFilters []collectors.MetricFilter
+	m                   *monitoring.Service
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -132,11 +166,13 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-func newHandler(projectIDs []string, m *monitoring.Service, logger log.Logger) *handler {
+func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters []collectors.MetricFilter, m *monitoring.Service, logger log.Logger) *handler {
 	h := &handler{
-		logger:     logger,
-		projectIDs: projectIDs,
-		m:          m,
+		logger:              logger,
+		projectIDs:          projectIDs,
+		metricsPrefixes:     metricPrefixes,
+		metricsExtraFilters: metricExtraFilters,
+		m:                   m,
 	}
 
 	h.handler = h.innerHandler(nil)
@@ -147,7 +183,15 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 	registry := prometheus.NewRegistry()
 
 	for _, project := range h.projectIDs {
-		monitoringCollector, err := collectors.NewMonitoringCollector(project, h.m, filters, h.logger)
+		monitoringCollector, err := collectors.NewMonitoringCollector(project, h.m, collectors.MonitoringCollectorOptions{
+			MetricTypePrefixes:    h.filterMetricTypePrefixes(filters),
+			ExtraFilters:          h.metricsExtraFilters,
+			RequestInterval:       *monitoringMetricsInterval,
+			RequestOffset:         *monitoringMetricsOffset,
+			IngestDelay:           *monitoringMetricsIngestDelay,
+			FillMissingLabels:     *collectorFillMissingLabels,
+			DropDelegatedProjects: *monitoringDropDelegatedProjects,
+		}, h.logger)
 		if err != nil {
 			level.Error(h.logger).Log("err", err)
 			os.Exit(1)
@@ -162,6 +206,21 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 
 	// Delegate http serving to Prometheus client library, which will call collector.Collect.
 	return promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{})
+}
+
+// filterMetricTypePrefixes filters the initial list of metric type prefixes, with the ones coming from an individual
+// prometheus collect request.
+func (h *handler) filterMetricTypePrefixes(filters map[string]bool) []string {
+	filteredPrefixes := h.metricsPrefixes
+	if len(filters) > 0 {
+		filteredPrefixes = nil
+		for _, prefix := range h.metricsPrefixes {
+			if filters[prefix] {
+				filteredPrefixes = append(filteredPrefixes, prefix)
+			}
+		}
+	}
+	return filteredPrefixes
 }
 
 func main() {
@@ -196,7 +255,9 @@ func main() {
 	}
 
 	projectIDs := strings.Split(*projectID, ",")
-	handler := newHandler(projectIDs, monitoringService, logger)
+	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
+	metricExtraFilters := parseMetricExtraFilters()
+	handler := newHandler(projectIDs, metricsTypePrefixes, metricExtraFilters, monitoringService, logger)
 
 	http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -214,4 +275,19 @@ func main() {
 		level.Error(logger).Log("err", err)
 		os.Exit(1)
 	}
+}
+
+func parseMetricExtraFilters() []collectors.MetricFilter {
+	var extraFilters []collectors.MetricFilter
+	for _, ef := range *monitoringMetricsExtraFilter {
+		efPrefix, efModifier := utils.GetExtraFilterModifiers(ef, ":")
+		if efPrefix != "" {
+			extraFilter := collectors.MetricFilter{
+				Prefix:   efPrefix,
+				Modifier: efModifier,
+			}
+			extraFilters = append(extraFilters, extraFilter)
+		}
+	}
+	return extraFilters
 }

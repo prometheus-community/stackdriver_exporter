@@ -26,38 +26,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
 	"google.golang.org/api/monitoring/v3"
-	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/prometheus-community/stackdriver_exporter/utils"
-)
-
-var (
-	monitoringMetricsTypePrefixes = kingpin.Flag(
-		"monitoring.metrics-type-prefixes", "Comma separated Google Stackdriver Monitoring Metric Type prefixes.",
-	).Required().String()
-
-	monitoringMetricsInterval = kingpin.Flag(
-		"monitoring.metrics-interval", "Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used.",
-	).Default("5m").Duration()
-
-	monitoringMetricsOffset = kingpin.Flag(
-		"monitoring.metrics-offset", "Offset for the Google Stackdriver Monitoring Metrics interval into the past.",
-	).Default("0s").Duration()
-
-	monitoringMetricsIngestDelay = kingpin.Flag(
-		"monitoring.metrics-ingest-delay", "Offset for the Google Stackdriver Monitoring Metrics interval into the past by the ingest delay from the metric's metadata.",
-	).Default("false").Bool()
-
-	collectorFillMissingLabels = kingpin.Flag(
-		"collector.fill-missing-labels", "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure.",
-	).Default("true").Bool()
-
-	monitoringDropDelegatedProjects = kingpin.Flag(
-		"monitoring.drop-delegated-projects", "Drop metrics from attached projects and fetch `project_id` only.",
-	).Default("false").Bool()
-
-	monitoringMetricsExtraFilter = kingpin.Flag(
-		"monitoring.filters", "Filters. i.e: pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")").Strings()
 )
 
 type MetricFilter struct {
@@ -84,11 +54,28 @@ type MonitoringCollector struct {
 	logger                          log.Logger
 }
 
-func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, filters map[string]bool, logger log.Logger) (*MonitoringCollector, error) {
-	if *monitoringMetricsTypePrefixes == "" {
-		return nil, errors.New("Flag `monitoring.metrics-type-prefixes` is required")
-	}
+type MonitoringCollectorOptions struct {
+	// MetricTypePrefixes are the Google Monitoring (ex-Stackdriver) metric type prefixes that the collector
+	// will be querying.
+	MetricTypePrefixes []string
+	// ExtraFilters is a list of criteria to apply to each corresponding metric prefix query. If one or more are
+	// applicable to a given metric type prefix, they will be 'AND' concatenated.
+	ExtraFilters []MetricFilter
+	// RequestInterval is the time interval used in each request to get metrics. If there are many data points returned
+	// during this interval, only the latest will be reported.
+	RequestInterval time.Duration
+	// RequestOffset is used to offset the requested interval into the past.
+	RequestOffset time.Duration
+	// IngestDelay decides if the ingestion delay specified in the metrics metadata is used when calculating the
+	// request time interval.
+	IngestDelay bool
+	// FillMissingLabels decides if metric labels should be added with empty string to prevent failures due to label inconsistency on metrics.
+	FillMissingLabels bool
+	// DropDelegatedProjects decides if only metrics matching the collector's projectID should be retrieved.
+	DropDelegatedProjects bool
+}
 
+func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger) (*MonitoringCollector, error) {
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace:   "stackdriver",
@@ -149,35 +136,13 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		},
 	)
 
-	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
-	filteredPrefixes := metricsTypePrefixes
-	if len(filters) > 0 {
-		filteredPrefixes = nil
-		for _, prefix := range metricsTypePrefixes {
-			if filters[prefix] {
-				filteredPrefixes = append(filteredPrefixes, prefix)
-			}
-		}
-	}
-	var extraFilters []MetricFilter
-	for _, ef := range *monitoringMetricsExtraFilter {
-		efPrefix, efModifier := utils.GetExtraFilterModifiers(ef, ":")
-		if efPrefix != "" {
-			extraFilter := MetricFilter{
-				Prefix:   efPrefix,
-				Modifier: efModifier,
-			}
-			extraFilters = append(extraFilters, extraFilter)
-		}
-	}
-
 	monitoringCollector := &MonitoringCollector{
 		projectID:                       projectID,
-		metricsTypePrefixes:             filteredPrefixes,
-		metricsFilters:                  extraFilters,
-		metricsInterval:                 *monitoringMetricsInterval,
-		metricsOffset:                   *monitoringMetricsOffset,
-		metricsIngestDelay:              *monitoringMetricsIngestDelay,
+		metricsTypePrefixes:             opts.MetricTypePrefixes,
+		metricsFilters:                  opts.ExtraFilters,
+		metricsInterval:                 opts.RequestInterval,
+		metricsOffset:                   opts.RequestOffset,
+		metricsIngestDelay:              opts.IngestDelay,
 		monitoringService:               monitoringService,
 		apiCallsTotalMetric:             apiCallsTotalMetric,
 		scrapesTotalMetric:              scrapesTotalMetric,
@@ -185,8 +150,8 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		lastScrapeErrorMetric:           lastScrapeErrorMetric,
 		lastScrapeTimestampMetric:       lastScrapeTimestampMetric,
 		lastScrapeDurationSecondsMetric: lastScrapeDurationSecondsMetric,
-		collectorFillMissingLabels:      *collectorFillMissingLabels,
-		monitoringDropDelegatedProjects: *monitoringDropDelegatedProjects,
+		collectorFillMissingLabels:      opts.FillMissingLabels,
+		monitoringDropDelegatedProjects: opts.DropDelegatedProjects,
 		logger:                          logger,
 	}
 
