@@ -65,7 +65,7 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 | --------------------------------- | -------- | ------- | ----------- |
 | `google.project-id`               | No       | GCloud SDK auto-discovery | Comma seperated list of Google Project IDs |
 | `monitoring.metrics-ingest-delay` | No       |         | Offsets metric collection by a delay appropriate for each metric type, e.g. because bigquery metrics are slow to appear |
-| `monitoring.metrics-type-prefixes | Yes      |         | Comma separated Google Stackdriver Monitoring Metric Type prefixes (see [example][metrics-prefix-example] and [available metrics][metrics-list]) |
+| `monitoring.metrics-type-prefixes` | Yes      |         | Comma separated Google Stackdriver Monitoring Metric Type prefixes (see [example][metrics-prefix-example] and [available metrics][metrics-list]) |
 | `monitoring.metrics-interval`     | No       | `5m`    | Metric's timestamp interval to request from the Google Stackdriver Monitoring Metrics API. Only the most recent data point is used |
 | `monitoring.metrics-offset`       | No       | `0s`    | Offset (into the past) for the metric's timestamp interval to request from the Google Stackdriver Monitoring Metrics API, to handle latency in published metrics |
 | `monitoring.filters`              | No       |         | Formatted string to allow filtering on certain metrics type |
