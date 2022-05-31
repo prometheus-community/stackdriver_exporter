@@ -105,7 +105,7 @@ If we want to get all `CPU` (`compute.googleapis.com/instance/cpu`) and `Disk` (
 
 ```
 stackdriver_exporter \
-  --google.project-id my-test-project \
+  --google.project-id=my-test-project \
   --monitoring.metrics-type-prefixes "compute.googleapis.com/instance/cpu,compute.googleapis.com/instance/disk"
 ```
 
@@ -113,7 +113,7 @@ Using extra filters:
 
 ```
 stackdriver_exporter \
- --google.project-id my-test-project \
+ --google.project-id=my-test-project \
  --monitoring.metrics-type-prefixes='pubsub.googleapis.com/subscription' \
  --monitoring.filters='pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match("us-west4.*my-team-subs.*")'
 ```
