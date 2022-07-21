@@ -442,7 +442,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 				} else {
 					metricValue = prevValue
 				}
-				level.Debug(c.logger).Log("msg", "deltaDoubleIsCounter", "metric", timeSeries.Metric.Type, "labels",
+				level.Debug(c.logger).Log("msg", "deltaDoubleAsCounter", "metric", timeSeries.Metric.Type, "labels",
 					SerializeLabels(labelKeys, labelValues), "cacheKey", cacheKey,
 					"newestEndTime", newestEndTime, "prevValue", prevValue, "curValue", curValue,
 					"metricValue", metricValue, "isNewValue", newValue)
@@ -451,11 +451,20 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			}
 		case "DISTRIBUTION":
 			dist := newestTSPoint.Value.DistributionValue
+			if timeSeries.MetricKind == "DELTA" && c.aggregateDeltas {
+				cacheKey := GetCacheKey(timeSeries.Metric.Type, labelKeys, labelValues)
+				cacheEntry := GetDistributionEntry(cacheKey)
+				isNewEntry := SetDistributionEntry(cacheKey, dist, newestEndTime)
+				if isNewEntry {
+					dist = CacheEntryToDistribution(*cacheEntry, dist)
+				}
+			}
 			buckets, err := c.generateHistogramBuckets(dist)
 			if err == nil {
 				timeSeriesMetrics.CollectNewConstHistogram(timeSeries, newestEndTime, labelKeys, dist, buckets, labelValues)
 			} else {
-				level.Debug(c.logger).Log("msg", "discarding", "resource", timeSeries.Resource.Type, "metric", timeSeries.Metric.Type, "err", err)
+				level.Debug(c.logger).Log("msg", "discarding", "resource", timeSeries.Resource.Type, "metric",
+					timeSeries.Metric.Type, "err", err)
 			}
 			continue
 		default:
