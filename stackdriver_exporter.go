@@ -208,7 +208,7 @@ func (h *handler) innerHandler(metricFilters []string, projectFilters map[string
 	registry := prometheus.NewRegistry()
 
 	for _, project := range h.projectIDs {
-		if len(projectFilters) > 0 && projectFilters[project] == false {
+		if len(projectFilters) > 0 && !projectFilters[project] {
 			continue
 		}
 
