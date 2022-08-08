@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -27,10 +28,14 @@ type CacheEntry struct {
 
 var (
 	counterCache = make(map[uint64]*CacheEntry)
+	counterMutex = &sync.RWMutex{}
 )
 
 // GetCounterValue retrieves the previously stored value for a metric.
 func GetCounterValue(key uint64) float64 {
+	counterMutex.Lock()
+	defer counterMutex.Unlock()
+
 	if entry, ok := counterCache[key]; ok {
 		return entry.val
 	}
@@ -41,6 +46,9 @@ func GetCounterValue(key uint64) float64 {
 
 // SetCounterValue sets the current value for a metric.
 func SetCounterValue(key uint64, val float64, ts time.Time) bool {
+	counterMutex.Lock()
+	defer counterMutex.Unlock()
+
 	if entry, ok := counterCache[key]; ok {
 		if ts.After(entry.ts) {
 			newEntry := CacheEntry{ts: ts, val: val}

@@ -14,6 +14,7 @@
 package collectors
 
 import (
+	"sync"
 	"time"
 
 	"google.golang.org/api/monitoring/v3"
@@ -28,11 +29,15 @@ type DistributionCacheEntry struct {
 
 var (
 	distributionCache = make(map[uint64]*DistributionCacheEntry)
+	distributionMutex = &sync.RWMutex{}
 )
 
 // GetDistributionEntry retrieves the previously stored CacheEntry for a metric.  If
 // it doesn't exist, it makes a new empty one and returns that.
 func GetDistributionEntry(key uint64) *DistributionCacheEntry {
+	distributionMutex.Lock()
+	defer distributionMutex.Unlock()
+
 	if entry, ok := distributionCache[key]; ok {
 		return entry
 	}
@@ -44,6 +49,9 @@ func GetDistributionEntry(key uint64) *DistributionCacheEntry {
 // SetDistributionEntry sets the current cached value for a distribution and returns true
 // if it is a new measurement, otherwise it does nothing and returns false.
 func SetDistributionEntry(key uint64, dist *monitoring.Distribution, ts time.Time) bool {
+	distributionMutex.Lock()
+	defer distributionMutex.Unlock()
+
 	if entry, ok := distributionCache[key]; ok {
 		if ts.After(entry.ts) {
 			var new_buckets []int64
