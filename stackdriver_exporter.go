@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/rehttp"
 	"github.com/go-kit/log"
@@ -191,7 +192,7 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 			IngestDelay:           *monitoringMetricsIngestDelay,
 			FillMissingLabels:     *collectorFillMissingLabels,
 			DropDelegatedProjects: *monitoringDropDelegatedProjects,
-		}, h.logger)
+		}, h.logger, collectors.NewInMemoryDeltaCounterStore(h.logger, time.Hour))
 		if err != nil {
 			level.Error(h.logger).Log("err", err)
 			os.Exit(1)

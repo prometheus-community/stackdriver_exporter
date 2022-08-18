@@ -52,6 +52,7 @@ type MonitoringCollector struct {
 	collectorFillMissingLabels      bool
 	monitoringDropDelegatedProjects bool
 	logger                          log.Logger
+	deltaMetricStore                DeltaCounterStore
 }
 
 type MonitoringCollectorOptions struct {
@@ -75,7 +76,7 @@ type MonitoringCollectorOptions struct {
 	DropDelegatedProjects bool
 }
 
-func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger) (*MonitoringCollector, error) {
+func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, deltaStore DeltaCounterStore) (*MonitoringCollector, error) {
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace:   "stackdriver",
@@ -153,6 +154,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		collectorFillMissingLabels:      opts.FillMissingLabels,
 		monitoringDropDelegatedProjects: opts.DropDelegatedProjects,
 		logger:                          logger,
+		deltaMetricStore:                deltaStore,
 	}
 
 	return monitoringCollector, nil
@@ -171,7 +173,7 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 	var begun = time.Now()
 
 	errorMetric := float64(0)
-	if err := c.reportMonitoringMetrics(ch); err != nil {
+	if err := c.reportMonitoringMetrics(ch, begun); err != nil {
 		errorMetric = float64(1)
 		c.scrapeErrorsTotalMetric.Inc()
 		level.Error(c.logger).Log("msg", "Error while getting Google Stackdriver Monitoring metrics", "err", err)
@@ -193,7 +195,7 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 	c.lastScrapeDurationSecondsMetric.Collect(ch)
 }
 
-func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metric) error {
+func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metric, begun time.Time) error {
 	metricDescriptorsFunction := func(page *monitoring.ListMetricDescriptorsResponse) error {
 		var wg = &sync.WaitGroup{}
 
@@ -270,8 +272,8 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					if page == nil {
 						break
 					}
-					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch); err != nil {
-						level.Error(c.logger).Log("msg", "error reporting Time Series metrics for descripto", "descriptor", metricDescriptor.Type, "err", err)
+					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch, c.deltaMetricStore, begun); err != nil {
+						level.Error(c.logger).Log("msg", "error reporting Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
 						errChannel <- err
 						break
 					}
@@ -317,6 +319,21 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 	wg.Wait()
 	close(errChannel)
 
+	names := c.deltaMetricStore.ListMetricDescriptorsNotCollected(begun)
+	for _, descriptor := range names {
+		level.Debug(c.logger).Log("msg", "Exporting uncollected delta counter", "metric_descriptor_name", descriptor.name)
+		ts := TimeSeriesMetrics{
+			metricDescriptor:  &monitoring.MetricDescriptor{Name: descriptor.name, Description: descriptor.description},
+			ch:                ch,
+			fillMissingLabels: c.collectorFillMissingLabels,
+			constMetrics:      nil,
+			histogramMetrics:  nil,
+			deltaMetricStore:  c.deltaMetricStore,
+		}
+		ts.Complete(begun)
+	}
+
+	level.Debug(c.logger).Log("msg", "Done reporting monitoring metrics")
 	return <-errChannel
 }
 
@@ -324,6 +341,8 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	page *monitoring.ListTimeSeriesResponse,
 	metricDescriptor *monitoring.MetricDescriptor,
 	ch chan<- prometheus.Metric,
+	deltaMetricStore DeltaCounterStore,
+	begun time.Time,
 ) error {
 	var metricValue float64
 	var metricValueType prometheus.ValueType
@@ -333,8 +352,9 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 		metricDescriptor:  metricDescriptor,
 		ch:                ch,
 		fillMissingLabels: c.collectorFillMissingLabels,
-		constMetrics:      make(map[string][]ConstMetric),
+		constMetrics:      make(map[string][]*ConstMetric),
 		histogramMetrics:  make(map[string][]HistogramMetric),
+		deltaMetricStore:  deltaMetricStore,
 	}
 	for _, timeSeries := range page.TimeSeries {
 		newestEndTime := time.Unix(0, 0)
@@ -388,7 +408,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 		case "GAUGE":
 			metricValueType = prometheus.GaugeValue
 		case "DELTA":
-			metricValueType = prometheus.GaugeValue
+			metricValueType = prometheus.CounterValue
 		case "CUMULATIVE":
 			metricValueType = prometheus.CounterValue
 		default:
@@ -419,9 +439,13 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			continue
 		}
 
-		timeSeriesMetrics.CollectNewConstMetric(timeSeries, newestEndTime, labelKeys, metricValueType, metricValue, labelValues)
+		if timeSeries.MetricKind == "DELTA" {
+			timeSeriesMetrics.CollectNewDeltaMetric(timeSeries, newestEndTime, labelKeys, metricValue, labelValues)
+		} else {
+			timeSeriesMetrics.CollectNewConstMetric(timeSeries, newestEndTime, labelKeys, metricValueType, metricValue, labelValues)
+		}
 	}
-	timeSeriesMetrics.Complete()
+	timeSeriesMetrics.Complete(begun)
 	return nil
 }
 
