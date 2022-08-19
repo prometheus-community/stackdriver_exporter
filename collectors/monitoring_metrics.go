@@ -38,9 +38,10 @@ type TimeSeriesMetrics struct {
 
 	fillMissingLabels bool
 	constMetrics      map[string][]*ConstMetric
-	histogramMetrics  map[string][]HistogramMetric
+	histogramMetrics  map[string][]*HistogramMetric
 
-	deltaMetricStore DeltaCounterStore
+	deltaCounterStore      DeltaCounterStore
+	deltaDistributionStore DeltaDistributionStore
 }
 
 func (t *TimeSeriesMetrics) newMetricDesc(fqName string, labelKeys []string) *prometheus.Desc {
@@ -74,15 +75,12 @@ type HistogramMetric struct {
 	keysHash uint64
 }
 
-func (t *TimeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string) {
+func (t *TimeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string, metricKind string) {
 	fqName := buildFQName(timeSeries)
 
-	if t.fillMissingLabels {
-		vs, ok := t.histogramMetrics[fqName]
-		if !ok {
-			vs = make([]HistogramMetric, 0)
-		}
-		v := HistogramMetric{
+	var v HistogramMetric
+	if t.fillMissingLabels || metricKind == "DELTA" {
+		v = HistogramMetric{
 			fqName:      fqName,
 			labelKeys:   labelKeys,
 			dist:        dist,
@@ -92,9 +90,22 @@ func (t *TimeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 
 			keysHash: hashLabelKeys(labelKeys),
 		}
-		t.histogramMetrics[fqName] = append(vs, v)
+	}
+
+	if metricKind == "DELTA" {
+		t.deltaDistributionStore.Increment(t.metricDescriptor, &v)
 		return
 	}
+
+	if t.fillMissingLabels {
+		vs, ok := t.histogramMetrics[fqName]
+		if !ok {
+			vs = make([]*HistogramMetric, 0)
+		}
+		t.histogramMetrics[fqName] = append(vs, &v)
+		return
+	}
+
 	t.ch <- t.newConstHistogram(fqName, reportTime, labelKeys, dist, buckets, labelValues)
 }
 
@@ -111,32 +122,12 @@ func (t *TimeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Tim
 	)
 }
 
-func (t *TimeSeriesMetrics) CollectNewDeltaMetric(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, metricValue float64, labelValues []string) {
+func (t *TimeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string, metricKind string) {
 	fqName := buildFQName(timeSeries)
 
-	v := ConstMetric{
-		fqName:      fqName,
-		labelKeys:   labelKeys,
-		valueType:   prometheus.CounterValue,
-		value:       metricValue,
-		labelValues: labelValues,
-		reportTime:  reportTime,
-
-		keysHash: hashLabelKeys(labelKeys),
-	}
-
-	t.deltaMetricStore.Increment(t.metricDescriptor, &v)
-}
-
-func (t *TimeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string) {
-	fqName := buildFQName(timeSeries)
-
-	if t.fillMissingLabels {
-		vs, ok := t.constMetrics[fqName]
-		if !ok {
-			vs = make([]*ConstMetric, 0)
-		}
-		v := ConstMetric{
+	var v ConstMetric
+	if t.fillMissingLabels || metricKind == "DELTA" {
+		v = ConstMetric{
 			fqName:      fqName,
 			labelKeys:   labelKeys,
 			valueType:   metricValueType,
@@ -146,9 +137,22 @@ func (t *TimeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSer
 
 			keysHash: hashLabelKeys(labelKeys),
 		}
+	}
+
+	if metricKind == "DELTA" {
+		t.deltaCounterStore.Increment(t.metricDescriptor, &v)
+		return
+	}
+
+	if t.fillMissingLabels {
+		vs, ok := t.constMetrics[fqName]
+		if !ok {
+			vs = make([]*ConstMetric, 0)
+		}
 		t.constMetrics[fqName] = append(vs, &v)
 		return
 	}
+
 	t.ch <- t.newConstMetric(fqName, reportTime, labelKeys, metricValueType, metricValue, labelValues)
 }
 
@@ -177,9 +181,10 @@ func hashLabelKeys(labelKeys []string) uint64 {
 }
 
 func (t *TimeSeriesMetrics) Complete(reportingStartTime time.Time) {
-	t.completeDeltaMetrics(reportingStartTime)
+	t.completeDeltaConstMetrics(reportingStartTime)
+	t.completeDeltaHistogramMetrics(reportingStartTime)
 	t.completeConstMetrics(t.constMetrics)
-	t.completeHistogramMetrics()
+	t.completeHistogramMetrics(t.histogramMetrics)
 }
 
 func (t *TimeSeriesMetrics) completeConstMetrics(constMetrics map[string][]*ConstMetric) {
@@ -202,8 +207,8 @@ func (t *TimeSeriesMetrics) completeConstMetrics(constMetrics map[string][]*Cons
 	}
 }
 
-func (t *TimeSeriesMetrics) completeHistogramMetrics() {
-	for _, vs := range t.histogramMetrics {
+func (t *TimeSeriesMetrics) completeHistogramMetrics(histograms map[string][]*HistogramMetric) {
+	for _, vs := range histograms {
 		if len(vs) > 1 {
 			var needFill bool
 			for i := 1; i < len(vs); i++ {
@@ -221,14 +226,14 @@ func (t *TimeSeriesMetrics) completeHistogramMetrics() {
 	}
 }
 
-func (t *TimeSeriesMetrics) completeDeltaMetrics(reportingStartTime time.Time) {
-	descriptorMetrics := t.deltaMetricStore.ListMetricsByName(t.metricDescriptor.Name)
+func (t *TimeSeriesMetrics) completeDeltaConstMetrics(reportingStartTime time.Time) {
+	descriptorMetrics := t.deltaCounterStore.ListMetricsByName(t.metricDescriptor.Name)
 	now := time.Now().Truncate(time.Minute)
 
 	constMetrics := map[string][]*ConstMetric{}
 	for _, metrics := range descriptorMetrics {
 		for _, collected := range metrics {
-			// If the metric wasn't collected we still need to export it to keep the counter from going stale
+			// If the series wasn't collected we still need to export it to keep it from going stale
 			if reportingStartTime.After(collected.lastCollectedAt) {
 				reportingLag := collected.lastCollectedAt.Sub(collected.metric.reportTime).Truncate(time.Minute)
 				collected.metric.reportTime = now.Add(-reportingLag)
@@ -253,6 +258,41 @@ func (t *TimeSeriesMetrics) completeDeltaMetrics(reportingStartTime time.Time) {
 
 	if t.fillMissingLabels {
 		t.completeConstMetrics(constMetrics)
+	}
+}
+
+func (t *TimeSeriesMetrics) completeDeltaHistogramMetrics(reportingStartTime time.Time) {
+	descriptorMetrics := t.deltaDistributionStore.ListMetricsByName(t.metricDescriptor.Name)
+	now := time.Now().Truncate(time.Minute)
+
+	histograms := map[string][]*HistogramMetric{}
+	for _, metrics := range descriptorMetrics {
+		for _, collected := range metrics {
+			// If the series wasn't collected we still need to export it to keep it from going stale
+			if reportingStartTime.After(collected.lastCollectedAt) {
+				reportingLag := collected.lastCollectedAt.Sub(collected.histogram.reportTime).Truncate(time.Minute)
+				collected.histogram.reportTime = now.Add(-reportingLag)
+			}
+			if t.fillMissingLabels {
+				if _, exists := histograms[collected.histogram.fqName]; !exists {
+					histograms[collected.histogram.fqName] = []*HistogramMetric{}
+				}
+				histograms[collected.histogram.fqName] = append(histograms[collected.histogram.fqName], collected.histogram)
+			} else {
+				t.ch <- t.newConstHistogram(
+					collected.histogram.fqName,
+					collected.histogram.reportTime,
+					collected.histogram.labelKeys,
+					collected.histogram.dist,
+					collected.histogram.buckets,
+					collected.histogram.labelValues,
+				)
+			}
+		}
+	}
+
+	if t.fillMissingLabels {
+		t.completeHistogramMetrics(histograms)
 	}
 }
 
@@ -282,15 +322,15 @@ func fillConstMetricsLabels(metrics []*ConstMetric) []*ConstMetric {
 	return metrics
 }
 
-func fillHistogramMetricsLabels(metrics []HistogramMetric) []HistogramMetric {
+func fillHistogramMetricsLabels(metrics []*HistogramMetric) []*HistogramMetric {
 	allKeys := make(map[string]struct{})
 	for _, metric := range metrics {
 		for _, key := range metric.labelKeys {
 			allKeys[key] = struct{}{}
 		}
 	}
-	result := make([]HistogramMetric, len(metrics))
-	for i, metric := range metrics {
+
+	for _, metric := range metrics {
 		if len(metric.labelKeys) != len(allKeys) {
 			metricKeys := make(map[string]struct{})
 			for _, key := range metric.labelKeys {
@@ -303,8 +343,7 @@ func fillHistogramMetricsLabels(metrics []HistogramMetric) []HistogramMetric {
 				}
 			}
 		}
-		result[i] = metric
 	}
 
-	return result
+	return metrics
 }

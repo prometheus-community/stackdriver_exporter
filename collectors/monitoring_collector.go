@@ -52,7 +52,8 @@ type MonitoringCollector struct {
 	collectorFillMissingLabels      bool
 	monitoringDropDelegatedProjects bool
 	logger                          log.Logger
-	deltaMetricStore                DeltaCounterStore
+	deltaCounterStore               DeltaCounterStore
+	deltaDistributionStore          DeltaDistributionStore
 }
 
 type MonitoringCollectorOptions struct {
@@ -76,7 +77,7 @@ type MonitoringCollectorOptions struct {
 	DropDelegatedProjects bool
 }
 
-func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, deltaStore DeltaCounterStore) (*MonitoringCollector, error) {
+func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, counterStore DeltaCounterStore, distributionStore DeltaDistributionStore) (*MonitoringCollector, error) {
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace:   "stackdriver",
@@ -154,7 +155,8 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		collectorFillMissingLabels:      opts.FillMissingLabels,
 		monitoringDropDelegatedProjects: opts.DropDelegatedProjects,
 		logger:                          logger,
-		deltaMetricStore:                deltaStore,
+		deltaCounterStore:               counterStore,
+		deltaDistributionStore:          distributionStore,
 	}
 
 	return monitoringCollector, nil
@@ -272,7 +274,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					if page == nil {
 						break
 					}
-					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch, c.deltaMetricStore, begun); err != nil {
+					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch, begun); err != nil {
 						level.Error(c.logger).Log("msg", "error reporting Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
 						errChannel <- err
 						break
@@ -319,8 +321,18 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 	wg.Wait()
 	close(errChannel)
 
-	names := c.deltaMetricStore.ListMetricDescriptorsNotCollected(begun)
-	for _, descriptor := range names {
+	// Ensure any known descriptors which were not collected are exported to prevent them from going stale
+	uncollectedCounters := c.deltaCounterStore.ListMetricDescriptorsNotCollected(begun)
+	uncollectedHistograms := c.deltaDistributionStore.ListMetricDescriptorsNotCollected(begun)
+	uniqueDescriptors := map[MetricDescriptor]struct{}{}
+	for _, v := range uncollectedCounters {
+		uniqueDescriptors[v] = struct{}{}
+	}
+	for _, v := range uncollectedHistograms {
+		uniqueDescriptors[v] = struct{}{}
+	}
+
+	for descriptor, _ := range uniqueDescriptors {
 		level.Debug(c.logger).Log("msg", "Exporting uncollected delta counter", "metric_descriptor_name", descriptor.name)
 		ts := TimeSeriesMetrics{
 			metricDescriptor:  &monitoring.MetricDescriptor{Name: descriptor.name, Description: descriptor.description},
@@ -328,7 +340,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 			fillMissingLabels: c.collectorFillMissingLabels,
 			constMetrics:      nil,
 			histogramMetrics:  nil,
-			deltaMetricStore:  c.deltaMetricStore,
+			deltaCounterStore: c.deltaCounterStore,
 		}
 		ts.Complete(begun)
 	}
@@ -341,7 +353,6 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	page *monitoring.ListTimeSeriesResponse,
 	metricDescriptor *monitoring.MetricDescriptor,
 	ch chan<- prometheus.Metric,
-	deltaMetricStore DeltaCounterStore,
 	begun time.Time,
 ) error {
 	var metricValue float64
@@ -349,12 +360,13 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	var newestTSPoint *monitoring.Point
 
 	timeSeriesMetrics := &TimeSeriesMetrics{
-		metricDescriptor:  metricDescriptor,
-		ch:                ch,
-		fillMissingLabels: c.collectorFillMissingLabels,
-		constMetrics:      make(map[string][]*ConstMetric),
-		histogramMetrics:  make(map[string][]HistogramMetric),
-		deltaMetricStore:  deltaMetricStore,
+		metricDescriptor:       metricDescriptor,
+		ch:                     ch,
+		fillMissingLabels:      c.collectorFillMissingLabels,
+		constMetrics:           make(map[string][]*ConstMetric),
+		histogramMetrics:       make(map[string][]*HistogramMetric),
+		deltaCounterStore:      c.deltaCounterStore,
+		deltaDistributionStore: c.deltaDistributionStore,
 	}
 	for _, timeSeries := range page.TimeSeries {
 		newestEndTime := time.Unix(0, 0)
@@ -428,10 +440,12 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 		case "DISTRIBUTION":
 			dist := newestTSPoint.Value.DistributionValue
 			buckets, err := c.generateHistogramBuckets(dist)
+
 			if err == nil {
-				timeSeriesMetrics.CollectNewConstHistogram(timeSeries, newestEndTime, labelKeys, dist, buckets, labelValues)
+				timeSeriesMetrics.CollectNewConstHistogram(timeSeries, newestEndTime, labelKeys, dist, buckets, labelValues, timeSeries.MetricKind)
 			} else {
-				level.Debug(c.logger).Log("msg", "discarding", "resource", timeSeries.Resource.Type, "metric", timeSeries.Metric.Type, "err", err)
+				level.Debug(c.logger).Log("msg", "discarding", "resource", timeSeries.Resource.Type, "metric",
+					timeSeries.Metric.Type, "err", err)
 			}
 			continue
 		default:
@@ -439,11 +453,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			continue
 		}
 
-		if timeSeries.MetricKind == "DELTA" {
-			timeSeriesMetrics.CollectNewDeltaMetric(timeSeries, newestEndTime, labelKeys, metricValue, labelValues)
-		} else {
-			timeSeriesMetrics.CollectNewConstMetric(timeSeries, newestEndTime, labelKeys, metricValueType, metricValue, labelValues)
-		}
+		timeSeriesMetrics.CollectNewConstMetric(timeSeries, newestEndTime, labelKeys, metricValueType, metricValue, labelValues, timeSeries.MetricKind)
 	}
 	timeSeriesMetrics.Complete(begun)
 	return nil

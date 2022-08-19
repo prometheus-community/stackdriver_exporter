@@ -192,7 +192,9 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 			IngestDelay:           *monitoringMetricsIngestDelay,
 			FillMissingLabels:     *collectorFillMissingLabels,
 			DropDelegatedProjects: *monitoringDropDelegatedProjects,
-		}, h.logger, collectors.NewInMemoryDeltaCounterStore(h.logger, time.Hour))
+		}, h.logger, collectors.NewInMemoryDeltaCounterStore(h.logger, time.Minute*30), collectors.NewInMemoryDeltaDistributionStore(h.logger, time.Minute*30))
+		//TODO config flag for TTL value
+		//TODO config flag for aggregate deltas
 		if err != nil {
 			level.Error(h.logger).Log("err", err)
 			os.Exit(1)
