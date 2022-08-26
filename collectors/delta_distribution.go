@@ -42,10 +42,13 @@ type DeltaDistributionStore interface {
 	ListMetrics(metricDescriptorName string) map[string][]*CollectedHistogram
 }
 
-type histogramEntry = map[uint64]*CollectedHistogram
+type histogramEntry struct {
+	collected map[uint64]*CollectedHistogram
+	mutex     *sync.RWMutex
+}
 
 type inMemoryDeltaDistributionStore struct {
-	store      map[string]histogramEntry
+	store      map[string]*histogramEntry
 	ttl        time.Duration
 	storeMutex *sync.RWMutex
 	logger     log.Logger
@@ -53,33 +56,39 @@ type inMemoryDeltaDistributionStore struct {
 
 // NewInMemoryDeltaDistributionStore returns an implementation of DeltaDistributionStore which is persisted in-memory
 func NewInMemoryDeltaDistributionStore(logger log.Logger, ttl time.Duration) DeltaDistributionStore {
-	return inMemoryDeltaDistributionStore{
-		store:      map[string]histogramEntry{},
+	return &inMemoryDeltaDistributionStore{
+		store:      map[string]*histogramEntry{},
 		storeMutex: &sync.RWMutex{},
 		logger:     logger,
 		ttl:        ttl,
 	}
 }
 
-func (s inMemoryDeltaDistributionStore) Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *HistogramMetric) {
+func (s *inMemoryDeltaDistributionStore) Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *HistogramMetric) {
 	if currentValue == nil {
 		return
 	}
 
-	var entry histogramEntry
+	var entry *histogramEntry
 	s.storeMutex.Lock()
 	if _, exists := s.store[metricDescriptor.Name]; !exists {
-		s.store[metricDescriptor.Name] = histogramEntry{}
+		s.store[metricDescriptor.Name] = &histogramEntry{
+			collected: map[uint64]*CollectedHistogram{},
+			mutex:     &sync.RWMutex{},
+		}
 	}
 	entry = s.store[metricDescriptor.Name]
 	s.storeMutex.Unlock()
 
 	key := toHistogramKey(currentValue)
-	existing := entry[key]
+
+	entry.mutex.Lock()
+	defer entry.mutex.Unlock()
+	existing := entry.collected[key]
 
 	if existing == nil {
 		level.Debug(s.logger).Log("msg", "Tracking new histogram", "fqName", currentValue.fqName, "key", key, "incoming_time", currentValue.reportTime)
-		entry[key] = &CollectedHistogram{histogram: currentValue, lastCollectedAt: time.Now()}
+		entry.collected[key] = &CollectedHistogram{histogram: currentValue, lastCollectedAt: time.Now()}
 		return
 	}
 
@@ -133,7 +142,7 @@ func mergeHistograms(existing *HistogramMetric, current *HistogramMetric) *Histo
 	return current
 }
 
-func (s inMemoryDeltaDistributionStore) ListMetrics(metricDescriptorName string) map[string][]*CollectedHistogram {
+func (s *inMemoryDeltaDistributionStore) ListMetrics(metricDescriptorName string) map[string][]*CollectedHistogram {
 	output := map[string][]*CollectedHistogram{}
 	now := time.Now()
 	ttlWindowStart := now.Add(-s.ttl)
@@ -146,11 +155,13 @@ func (s inMemoryDeltaDistributionStore) ListMetrics(metricDescriptorName string)
 	}
 	s.storeMutex.Unlock()
 
-	for key, collected := range entry {
+	entry.mutex.Lock()
+	defer entry.mutex.Unlock()
+	for key, collected := range entry.collected {
 		//Scan and remove metrics which are outside the TTL
 		if ttlWindowStart.After(collected.lastCollectedAt) {
 			level.Debug(s.logger).Log("msg", "Deleting histogram entry outside of TTL", "key", key, "fqName", collected.histogram.fqName)
-			delete(entry, key)
+			delete(entry.collected, key)
 			continue
 		}
 
