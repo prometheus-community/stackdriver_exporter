@@ -144,7 +144,7 @@ The biggest challenge to producing a correct result is that a counter for promet
 
 #### Start-up Delay
 
-When the exporter first starts it has no persisted counter information and the stores will be empty. When the first sample is received for a series it is intended to be a change from a previous value according to GCP, a delta. But the prometheus counter is not initialized to 0 so it does not export this as a change from 0, it exports that the counter started at the sample value. Since the series exported are dynamic it's impossible to export an initial 0 value in order to account for this issue. The end result is that it can take a few cycles for aggregated metrics to start showing rates exactly as GCP. 
+When the exporter first starts it has no persisted counter information and the stores will be empty. When the first sample is received for a series it is intended to be a change from a previous value according to GCP, a delta. But the prometheus counter is not initialized to 0 so it does not export this as a change from 0, it exports that the counter started at the sample value. Since the series exported are dynamic it's not possible to export an [initial 0 value](https://prometheus.io/docs/practices/instrumentation/#avoid-missing-metrics) in order to account for this issue. The end result is that it can take a few cycles for aggregated metrics to start showing rates exactly as GCP. 
 
 As an example consider a prometheus query, `sum by(backend_target_name) (rate(stackdriver_https_lb_rule_loadbalancing_googleapis_com_https_request_bytes_count[1m]))` which is aggregating 5 series. All 5 series will need to have two samples from GCP in order for the query to produce the same result as GCP.
 
