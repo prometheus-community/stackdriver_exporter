@@ -54,6 +54,7 @@ type MonitoringCollector struct {
 	logger                          log.Logger
 	deltaCounterStore               DeltaCounterStore
 	deltaDistributionStore          DeltaDistributionStore
+	aggregateDeltas                 bool
 }
 
 type MonitoringCollectorOptions struct {
@@ -75,6 +76,8 @@ type MonitoringCollectorOptions struct {
 	FillMissingLabels bool
 	// DropDelegatedProjects decides if only metrics matching the collector's projectID should be retrieved.
 	DropDelegatedProjects bool
+	// AggregateDeltas decides if DELTA metrics should be treated as a counter using the provided counterStore/distributionStore or a gauge
+	AggregateDeltas bool
 }
 
 func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, counterStore DeltaCounterStore, distributionStore DeltaDistributionStore) (*MonitoringCollector, error) {
@@ -157,6 +160,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		logger:                          logger,
 		deltaCounterStore:               counterStore,
 		deltaDistributionStore:          distributionStore,
+		aggregateDeltas:                 opts.AggregateDeltas,
 	}
 
 	return monitoringCollector, nil
@@ -321,30 +325,6 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 	wg.Wait()
 	close(errChannel)
 
-	// Ensure any known descriptors which were not collected are exported to prevent them from going stale
-	uncollectedCounters := c.deltaCounterStore.ListMetricDescriptorsNotCollected(begun)
-	uncollectedHistograms := c.deltaDistributionStore.ListMetricDescriptorsNotCollected(begun)
-	uniqueDescriptors := map[MetricDescriptor]struct{}{}
-	for _, v := range uncollectedCounters {
-		uniqueDescriptors[v] = struct{}{}
-	}
-	for _, v := range uncollectedHistograms {
-		uniqueDescriptors[v] = struct{}{}
-	}
-
-	for descriptor, _ := range uniqueDescriptors {
-		level.Debug(c.logger).Log("msg", "Exporting uncollected delta counter", "metric_descriptor_name", descriptor.name)
-		ts := TimeSeriesMetrics{
-			metricDescriptor:  &monitoring.MetricDescriptor{Name: descriptor.name, Description: descriptor.description},
-			ch:                ch,
-			fillMissingLabels: c.collectorFillMissingLabels,
-			constMetrics:      nil,
-			histogramMetrics:  nil,
-			deltaCounterStore: c.deltaCounterStore,
-		}
-		ts.Complete(begun)
-	}
-
 	level.Debug(c.logger).Log("msg", "Done reporting monitoring metrics")
 	return <-errChannel
 }
@@ -359,14 +339,15 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	var metricValueType prometheus.ValueType
 	var newestTSPoint *monitoring.Point
 
-	timeSeriesMetrics := &TimeSeriesMetrics{
-		metricDescriptor:       metricDescriptor,
-		ch:                     ch,
-		fillMissingLabels:      c.collectorFillMissingLabels,
-		constMetrics:           make(map[string][]*ConstMetric),
-		histogramMetrics:       make(map[string][]*HistogramMetric),
-		deltaCounterStore:      c.deltaCounterStore,
-		deltaDistributionStore: c.deltaDistributionStore,
+	timeSeriesMetrics, err := NewTimeSeriesMetrics(metricDescriptor,
+		ch,
+		c.collectorFillMissingLabels,
+		c.deltaCounterStore,
+		c.deltaDistributionStore,
+		c.aggregateDeltas,
+	)
+	if err != nil {
+		return fmt.Errorf("error creating the TimeSeriesMetrics %v", err)
 	}
 	for _, timeSeries := range page.TimeSeries {
 		newestEndTime := time.Unix(0, 0)

@@ -32,9 +32,10 @@ func buildFQName(timeSeries *monitoring.TimeSeries) string {
 	return prometheus.BuildFQName("stackdriver", utils.NormalizeMetricName(timeSeries.Resource.Type), utils.NormalizeMetricName(timeSeries.Metric.Type))
 }
 
-type TimeSeriesMetrics struct {
+type timeSeriesMetrics struct {
 	metricDescriptor *monitoring.MetricDescriptor
-	ch               chan<- prometheus.Metric
+
+	ch chan<- prometheus.Metric
 
 	fillMissingLabels bool
 	constMetrics      map[string][]*ConstMetric
@@ -42,9 +43,29 @@ type TimeSeriesMetrics struct {
 
 	deltaCounterStore      DeltaCounterStore
 	deltaDistributionStore DeltaDistributionStore
+	aggregateDeltas        bool
 }
 
-func (t *TimeSeriesMetrics) newMetricDesc(fqName string, labelKeys []string) *prometheus.Desc {
+func NewTimeSeriesMetrics(descriptor *monitoring.MetricDescriptor,
+	ch chan<- prometheus.Metric,
+	fillMissingLabels bool,
+	deltaCounterStore DeltaCounterStore,
+	deltaDistributionStore DeltaDistributionStore,
+	aggregateDeltas bool) (*timeSeriesMetrics, error) {
+
+	return &timeSeriesMetrics{
+		metricDescriptor:       descriptor,
+		ch:                     ch,
+		fillMissingLabels:      fillMissingLabels,
+		constMetrics:           make(map[string][]*ConstMetric),
+		histogramMetrics:       make(map[string][]*HistogramMetric),
+		deltaCounterStore:      deltaCounterStore,
+		deltaDistributionStore: deltaDistributionStore,
+		aggregateDeltas:        aggregateDeltas,
+	}, nil
+}
+
+func (t *timeSeriesMetrics) newMetricDesc(fqName string, labelKeys []string) *prometheus.Desc {
 	return prometheus.NewDesc(
 		fqName,
 		t.metricDescriptor.Description,
@@ -75,11 +96,11 @@ type HistogramMetric struct {
 	keysHash uint64
 }
 
-func (t *TimeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string, metricKind string) {
+func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string, metricKind string) {
 	fqName := buildFQName(timeSeries)
 
 	var v HistogramMetric
-	if t.fillMissingLabels || metricKind == "DELTA" {
+	if t.fillMissingLabels || (metricKind == "DELTA" && t.aggregateDeltas) {
 		v = HistogramMetric{
 			fqName:      fqName,
 			labelKeys:   labelKeys,
@@ -92,7 +113,7 @@ func (t *TimeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 		}
 	}
 
-	if metricKind == "DELTA" {
+	if metricKind == "DELTA" && t.aggregateDeltas {
 		t.deltaDistributionStore.Increment(t.metricDescriptor, &v)
 		return
 	}
@@ -109,7 +130,7 @@ func (t *TimeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 	t.ch <- t.newConstHistogram(fqName, reportTime, labelKeys, dist, buckets, labelValues)
 }
 
-func (t *TimeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
+func (t *timeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
 	return prometheus.NewMetricWithTimestamp(
 		reportTime,
 		prometheus.MustNewConstHistogram(
@@ -122,11 +143,11 @@ func (t *TimeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Tim
 	)
 }
 
-func (t *TimeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string, metricKind string) {
+func (t *timeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string, metricKind string) {
 	fqName := buildFQName(timeSeries)
 
 	var v ConstMetric
-	if t.fillMissingLabels || metricKind == "DELTA" {
+	if t.fillMissingLabels || (metricKind == "DELTA" && t.aggregateDeltas) {
 		v = ConstMetric{
 			fqName:      fqName,
 			labelKeys:   labelKeys,
@@ -139,7 +160,7 @@ func (t *TimeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSer
 		}
 	}
 
-	if metricKind == "DELTA" {
+	if metricKind == "DELTA" && t.aggregateDeltas {
 		t.deltaCounterStore.Increment(t.metricDescriptor, &v)
 		return
 	}
@@ -156,7 +177,7 @@ func (t *TimeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSer
 	t.ch <- t.newConstMetric(fqName, reportTime, labelKeys, metricValueType, metricValue, labelValues)
 }
 
-func (t *TimeSeriesMetrics) newConstMetric(fqName string, reportTime time.Time, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string) prometheus.Metric {
+func (t *timeSeriesMetrics) newConstMetric(fqName string, reportTime time.Time, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string) prometheus.Metric {
 	return prometheus.NewMetricWithTimestamp(
 		reportTime,
 		prometheus.MustNewConstMetric(
@@ -180,14 +201,14 @@ func hashLabelKeys(labelKeys []string) uint64 {
 	return dh
 }
 
-func (t *TimeSeriesMetrics) Complete(reportingStartTime time.Time) {
+func (t *timeSeriesMetrics) Complete(reportingStartTime time.Time) {
 	t.completeDeltaConstMetrics(reportingStartTime)
 	t.completeDeltaHistogramMetrics(reportingStartTime)
 	t.completeConstMetrics(t.constMetrics)
 	t.completeHistogramMetrics(t.histogramMetrics)
 }
 
-func (t *TimeSeriesMetrics) completeConstMetrics(constMetrics map[string][]*ConstMetric) {
+func (t *timeSeriesMetrics) completeConstMetrics(constMetrics map[string][]*ConstMetric) {
 	for _, vs := range constMetrics {
 		if len(vs) > 1 {
 			var needFill bool
@@ -207,7 +228,7 @@ func (t *TimeSeriesMetrics) completeConstMetrics(constMetrics map[string][]*Cons
 	}
 }
 
-func (t *TimeSeriesMetrics) completeHistogramMetrics(histograms map[string][]*HistogramMetric) {
+func (t *timeSeriesMetrics) completeHistogramMetrics(histograms map[string][]*HistogramMetric) {
 	for _, vs := range histograms {
 		if len(vs) > 1 {
 			var needFill bool
@@ -226,14 +247,14 @@ func (t *TimeSeriesMetrics) completeHistogramMetrics(histograms map[string][]*Hi
 	}
 }
 
-func (t *TimeSeriesMetrics) completeDeltaConstMetrics(reportingStartTime time.Time) {
+func (t *timeSeriesMetrics) completeDeltaConstMetrics(reportingStartTime time.Time) {
 	descriptorMetrics := t.deltaCounterStore.ListMetricsByName(t.metricDescriptor.Name)
 	now := time.Now().Truncate(time.Minute)
 
 	constMetrics := map[string][]*ConstMetric{}
 	for _, metrics := range descriptorMetrics {
 		for _, collected := range metrics {
-			// If the series wasn't collected we still need to export it to keep it from going stale
+			// If the metric wasn't collected we should still export it at the next sample time to avoid staleness
 			if reportingStartTime.After(collected.lastCollectedAt) {
 				reportingLag := collected.lastCollectedAt.Sub(collected.metric.reportTime).Truncate(time.Minute)
 				collected.metric.reportTime = now.Add(-reportingLag)
@@ -261,14 +282,14 @@ func (t *TimeSeriesMetrics) completeDeltaConstMetrics(reportingStartTime time.Ti
 	}
 }
 
-func (t *TimeSeriesMetrics) completeDeltaHistogramMetrics(reportingStartTime time.Time) {
+func (t *timeSeriesMetrics) completeDeltaHistogramMetrics(reportingStartTime time.Time) {
 	descriptorMetrics := t.deltaDistributionStore.ListMetricsByName(t.metricDescriptor.Name)
 	now := time.Now().Truncate(time.Minute)
 
 	histograms := map[string][]*HistogramMetric{}
 	for _, metrics := range descriptorMetrics {
 		for _, collected := range metrics {
-			// If the series wasn't collected we still need to export it to keep it from going stale
+			// If the histogram wasn't collected we should still export it at the next sample time to avoid staleness
 			if reportingStartTime.After(collected.lastCollectedAt) {
 				reportingLag := collected.lastCollectedAt.Sub(collected.histogram.reportTime).Truncate(time.Minute)
 				collected.histogram.reportTime = now.Add(-reportingLag)

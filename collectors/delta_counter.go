@@ -30,25 +30,15 @@ type CollectedMetric struct {
 	lastCollectedAt time.Time
 }
 
-type MetricDescriptor struct {
-	name        string
-	description string
-}
-
 type DeltaCounterStore interface {
 	Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *ConstMetric)
 	ListMetricsByName(metricDescriptorName string) map[string][]*CollectedMetric
-	ListMetricDescriptorsNotCollected(since time.Time) []MetricDescriptor
 }
 
-type metricEntry struct {
-	collected    map[uint64]*CollectedMetric
-	lastListedAt time.Time
-	description  string
-}
+type metricEntry = map[uint64]*CollectedMetric
 
 type inMemoryDeltaCounterStore struct {
-	store      map[string]*metricEntry
+	store      map[string]metricEntry
 	ttl        time.Duration
 	storeMutex *sync.RWMutex
 	logger     log.Logger
@@ -56,7 +46,7 @@ type inMemoryDeltaCounterStore struct {
 
 func NewInMemoryDeltaCounterStore(logger log.Logger, ttl time.Duration) DeltaCounterStore {
 	return inMemoryDeltaCounterStore{
-		store:      map[string]*metricEntry{},
+		store:      map[string]metricEntry{},
 		storeMutex: &sync.RWMutex{},
 		logger:     logger,
 		ttl:        ttl,
@@ -68,28 +58,25 @@ func (s inMemoryDeltaCounterStore) Increment(metricDescriptor *monitoring.Metric
 		return
 	}
 
-	var metric *metricEntry
+	var entry metricEntry
 	s.storeMutex.Lock()
 	if _, exists := s.store[metricDescriptor.Name]; !exists {
-		s.store[metricDescriptor.Name] = &metricEntry{
-			collected:    map[uint64]*CollectedMetric{},
-			lastListedAt: time.Time{},
-		}
+		s.store[metricDescriptor.Name] = metricEntry{}
 	}
-	metric = s.store[metricDescriptor.Name]
+	entry = s.store[metricDescriptor.Name]
 	s.storeMutex.Unlock()
 
 	key := toCounterKey(currentValue)
-	existing := metric.collected[key]
+	existing := entry[key]
 
 	if existing == nil {
 		level.Debug(s.logger).Log("msg", "Tracking new counter", "fqName", currentValue.fqName, "key", key, "current_value", currentValue.value, "incoming_time", currentValue.reportTime)
-		metric.collected[key] = &CollectedMetric{currentValue, time.Now()}
+		entry[key] = &CollectedMetric{currentValue, time.Now()}
 		return
 	}
 
 	if existing.metric.reportTime.Before(currentValue.reportTime) {
-		level.Debug(s.logger).Log("msg", "Incrementing existing counter", "fqName", currentValue.fqName, "key", key, "current_value", existing.metric.value, "adding", currentValue.value, "last_reported_time", metric.collected[key].metric.reportTime, "incoming_time", currentValue.reportTime)
+		level.Debug(s.logger).Log("msg", "Incrementing existing counter", "fqName", currentValue.fqName, "key", key, "current_value", existing.metric.value, "adding", currentValue.value, "last_reported_time", entry[key].metric.reportTime, "incoming_time", currentValue.reportTime)
 		currentValue.value = currentValue.value + existing.metric.value
 		existing.metric = currentValue
 		existing.lastCollectedAt = time.Now()
@@ -129,14 +116,13 @@ func (s inMemoryDeltaCounterStore) ListMetricsByName(metricDescriptorName string
 		s.storeMutex.Unlock()
 		return output
 	}
-	metric.lastListedAt = now
 	s.storeMutex.Unlock()
 
-	for key, collected := range metric.collected {
+	for key, collected := range metric {
 		//Scan and remove metrics which are outside the TTL
 		if ttlWindowStart.After(collected.lastCollectedAt) {
 			level.Debug(s.logger).Log("msg", "Deleting counter entry outside of TTL", "key", key, "fqName", collected.metric.fqName)
-			delete(metric.collected, key)
+			delete(metric, key)
 			continue
 		}
 
@@ -153,34 +139,4 @@ func (s inMemoryDeltaCounterStore) ListMetricsByName(metricDescriptorName string
 	}
 
 	return output
-}
-
-func (s inMemoryDeltaCounterStore) ListMetricDescriptorsNotCollected(since time.Time) []MetricDescriptor {
-	var names []MetricDescriptor
-	ttlWindowStart := time.Now().Add(-s.ttl)
-
-	s.storeMutex.Lock()
-	defer s.storeMutex.Unlock()
-
-	for name, metrics := range s.store {
-		//Scan and remove metrics which are outside the TTL
-		for key, collectedMetric := range metrics.collected {
-			if ttlWindowStart.After(collectedMetric.lastCollectedAt) {
-				level.Debug(s.logger).Log("msg", "Deleting counter entry outside of TTL", "key", key, "fqName", collectedMetric.metric.fqName)
-				delete(metrics.collected, key)
-			}
-		}
-
-		if len(metrics.collected) == 0 {
-			level.Debug(s.logger).Log("msg", "Deleting empty descriptor store entry", "metric_descriptor_name", name)
-			delete(s.store, name)
-			continue
-		}
-
-		if since.After(metrics.lastListedAt) {
-			names = append(names, MetricDescriptor{name: name, description: metrics.description})
-		}
-	}
-
-	return names
 }
