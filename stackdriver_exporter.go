@@ -107,7 +107,7 @@ var (
 	).Default("false").Bool()
 
 	monitoringMetricsDeltasTTL = kingpin.Flag(
-		"monitoring.aggregate-deltas-ttl", "How long should a delta metric continue to be exported after GCP stops producing the metric. Adjusting this can help with memory utilization with delta metrics",
+		"monitoring.aggregate-deltas-ttl", "How long should a delta metric continue to be exported after GCP stops producing a metric",
 	).Default("30m").Duration()
 )
 

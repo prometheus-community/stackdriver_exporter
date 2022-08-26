@@ -30,9 +30,16 @@ type CollectedHistogram struct {
 	lastCollectedAt time.Time
 }
 
+// DeltaDistributionStore defines a set of functions which must be implemented in order to be used as a DeltaDistributionStore
+// which accumulates DELTA histogram metrics over time
 type DeltaDistributionStore interface {
+
+	// Increment will use the incoming metricDescriptor and currentValue to either create a new entry or add the incoming
+	// value to an existing entry in the underlying store
 	Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *HistogramMetric)
-	ListMetricsByName(metricDescriptorName string) map[string][]*CollectedHistogram
+
+	// ListMetrics will return all known entries in the store for a metricDescriptorName
+	ListMetrics(metricDescriptorName string) map[string][]*CollectedHistogram
 }
 
 type histogramEntry = map[uint64]*CollectedHistogram
@@ -44,6 +51,7 @@ type inMemoryDeltaDistributionStore struct {
 	logger     log.Logger
 }
 
+// NewInMemoryDeltaDistributionStore returns an implementation of DeltaDistributionStore which is persisted in-memory
 func NewInMemoryDeltaDistributionStore(logger log.Logger, ttl time.Duration) DeltaDistributionStore {
 	return inMemoryDeltaDistributionStore{
 		store:      map[string]histogramEntry{},
@@ -125,7 +133,7 @@ func mergeHistograms(existing *HistogramMetric, current *HistogramMetric) *Histo
 	return current
 }
 
-func (s inMemoryDeltaDistributionStore) ListMetricsByName(metricDescriptorName string) map[string][]*CollectedHistogram {
+func (s inMemoryDeltaDistributionStore) ListMetrics(metricDescriptorName string) map[string][]*CollectedHistogram {
 	output := map[string][]*CollectedHistogram{}
 	now := time.Now()
 	ttlWindowStart := now.Add(-s.ttl)

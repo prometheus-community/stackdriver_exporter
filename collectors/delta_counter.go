@@ -30,9 +30,16 @@ type CollectedMetric struct {
 	lastCollectedAt time.Time
 }
 
+// DeltaCounterStore defines a set of functions which must be implemented in order to be used as a DeltaCounterStore
+// which accumulates DELTA Counter metrics over time
 type DeltaCounterStore interface {
+
+	// Increment will use the incoming metricDescriptor and currentValue to either create a new entry or add the incoming
+	// value to an existing entry in the underlying store
 	Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *ConstMetric)
-	ListMetricsByName(metricDescriptorName string) map[string][]*CollectedMetric
+
+	// ListMetrics will return all known entries in the store for a metricDescriptorName
+	ListMetrics(metricDescriptorName string) map[string][]*CollectedMetric
 }
 
 type metricEntry = map[uint64]*CollectedMetric
@@ -44,6 +51,7 @@ type inMemoryDeltaCounterStore struct {
 	logger     log.Logger
 }
 
+// NewInMemoryDeltaCounterStore returns an implementation of DeltaCounterStore which is persisted in-memory
 func NewInMemoryDeltaCounterStore(logger log.Logger, ttl time.Duration) DeltaCounterStore {
 	return inMemoryDeltaCounterStore{
 		store:      map[string]metricEntry{},
@@ -105,7 +113,7 @@ func toCounterKey(c *ConstMetric) uint64 {
 	return h
 }
 
-func (s inMemoryDeltaCounterStore) ListMetricsByName(metricDescriptorName string) map[string][]*CollectedMetric {
+func (s inMemoryDeltaCounterStore) ListMetrics(metricDescriptorName string) map[string][]*CollectedMetric {
 	output := map[string][]*CollectedMetric{}
 	now := time.Now()
 	ttlWindowStart := now.Add(-s.ttl)

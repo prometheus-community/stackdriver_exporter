@@ -248,7 +248,7 @@ func (t *timeSeriesMetrics) completeHistogramMetrics(histograms map[string][]*Hi
 }
 
 func (t *timeSeriesMetrics) completeDeltaConstMetrics(reportingStartTime time.Time) {
-	descriptorMetrics := t.deltaCounterStore.ListMetricsByName(t.metricDescriptor.Name)
+	descriptorMetrics := t.deltaCounterStore.ListMetrics(t.metricDescriptor.Name)
 	now := time.Now().Truncate(time.Minute)
 
 	constMetrics := map[string][]*ConstMetric{}
@@ -256,6 +256,9 @@ func (t *timeSeriesMetrics) completeDeltaConstMetrics(reportingStartTime time.Ti
 		for _, collected := range metrics {
 			// If the metric wasn't collected we should still export it at the next sample time to avoid staleness
 			if reportingStartTime.After(collected.lastCollectedAt) {
+				// Ideally we could use monitoring.MetricDescriptorMetadata.SamplePeriod to determine how many
+				// samples were missed to adjust this but monitoring.MetricDescriptorMetadata is viewed as optional
+				// for a monitoring.MetricDescriptor
 				reportingLag := collected.lastCollectedAt.Sub(collected.metric.reportTime).Truncate(time.Minute)
 				collected.metric.reportTime = now.Add(-reportingLag)
 			}
@@ -283,7 +286,7 @@ func (t *timeSeriesMetrics) completeDeltaConstMetrics(reportingStartTime time.Ti
 }
 
 func (t *timeSeriesMetrics) completeDeltaHistogramMetrics(reportingStartTime time.Time) {
-	descriptorMetrics := t.deltaDistributionStore.ListMetricsByName(t.metricDescriptor.Name)
+	descriptorMetrics := t.deltaDistributionStore.ListMetrics(t.metricDescriptor.Name)
 	now := time.Now().Truncate(time.Minute)
 
 	histograms := map[string][]*HistogramMetric{}
@@ -291,6 +294,9 @@ func (t *timeSeriesMetrics) completeDeltaHistogramMetrics(reportingStartTime tim
 		for _, collected := range metrics {
 			// If the histogram wasn't collected we should still export it at the next sample time to avoid staleness
 			if reportingStartTime.After(collected.lastCollectedAt) {
+				// Ideally we could use monitoring.MetricDescriptorMetadata.SamplePeriod to determine how many
+				// samples were missed to adjust this but monitoring.MetricDescriptorMetadata is viewed as optional
+				// for a monitoring.MetricDescriptor
 				reportingLag := collected.lastCollectedAt.Sub(collected.histogram.reportTime).Truncate(time.Minute)
 				collected.histogram.reportTime = now.Add(-reportingLag)
 			}
