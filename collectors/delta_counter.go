@@ -48,19 +48,17 @@ type metricEntry struct {
 }
 
 type inMemoryDeltaCounterStore struct {
-	store      map[string]*metricEntry
-	ttl        time.Duration
-	storeMutex *sync.RWMutex
-	logger     log.Logger
+	store  *sync.Map
+	ttl    time.Duration
+	logger log.Logger
 }
 
 // NewInMemoryDeltaCounterStore returns an implementation of DeltaCounterStore which is persisted in-memory
 func NewInMemoryDeltaCounterStore(logger log.Logger, ttl time.Duration) DeltaCounterStore {
 	return &inMemoryDeltaCounterStore{
-		store:      map[string]*metricEntry{},
-		storeMutex: &sync.RWMutex{},
-		logger:     logger,
-		ttl:        ttl,
+		store:  &sync.Map{},
+		logger: logger,
+		ttl:    ttl,
 	}
 }
 
@@ -69,16 +67,11 @@ func (s *inMemoryDeltaCounterStore) Increment(metricDescriptor *monitoring.Metri
 		return
 	}
 
-	var entry *metricEntry
-	s.storeMutex.Lock()
-	if _, exists := s.store[metricDescriptor.Name]; !exists {
-		s.store[metricDescriptor.Name] = &metricEntry{
-			collected: map[uint64]*CollectedMetric{},
-			mutex:     &sync.RWMutex{},
-		}
-	}
-	entry = s.store[metricDescriptor.Name]
-	s.storeMutex.Unlock()
+	tmp, _ := s.store.LoadOrStore(metricDescriptor.Name, &metricEntry{
+		collected: map[uint64]*CollectedMetric{},
+		mutex:     &sync.RWMutex{},
+	})
+	entry := tmp.(*metricEntry)
 
 	key := toCounterKey(currentValue)
 
@@ -127,13 +120,11 @@ func (s *inMemoryDeltaCounterStore) ListMetrics(metricDescriptorName string) map
 	now := time.Now()
 	ttlWindowStart := now.Add(-s.ttl)
 
-	s.storeMutex.Lock()
-	entry := s.store[metricDescriptorName]
-	if entry == nil {
-		s.storeMutex.Unlock()
+	tmp, exists := s.store.Load(metricDescriptorName)
+	if !exists {
 		return output
 	}
-	s.storeMutex.Unlock()
+	entry := tmp.(*metricEntry)
 
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()

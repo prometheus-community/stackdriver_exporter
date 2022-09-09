@@ -48,19 +48,17 @@ type histogramEntry struct {
 }
 
 type inMemoryDeltaDistributionStore struct {
-	store      map[string]*histogramEntry
-	ttl        time.Duration
-	storeMutex *sync.RWMutex
-	logger     log.Logger
+	store  *sync.Map
+	ttl    time.Duration
+	logger log.Logger
 }
 
 // NewInMemoryDeltaDistributionStore returns an implementation of DeltaDistributionStore which is persisted in-memory
 func NewInMemoryDeltaDistributionStore(logger log.Logger, ttl time.Duration) DeltaDistributionStore {
 	return &inMemoryDeltaDistributionStore{
-		store:      map[string]*histogramEntry{},
-		storeMutex: &sync.RWMutex{},
-		logger:     logger,
-		ttl:        ttl,
+		store:  &sync.Map{},
+		logger: logger,
+		ttl:    ttl,
 	}
 }
 
@@ -69,16 +67,11 @@ func (s *inMemoryDeltaDistributionStore) Increment(metricDescriptor *monitoring.
 		return
 	}
 
-	var entry *histogramEntry
-	s.storeMutex.Lock()
-	if _, exists := s.store[metricDescriptor.Name]; !exists {
-		s.store[metricDescriptor.Name] = &histogramEntry{
-			collected: map[uint64]*CollectedHistogram{},
-			mutex:     &sync.RWMutex{},
-		}
-	}
-	entry = s.store[metricDescriptor.Name]
-	s.storeMutex.Unlock()
+	tmp, _ := s.store.LoadOrStore(metricDescriptor.Name, &histogramEntry{
+		collected: map[uint64]*CollectedHistogram{},
+		mutex:     &sync.RWMutex{},
+	})
+	entry := tmp.(*histogramEntry)
 
 	key := toHistogramKey(currentValue)
 
@@ -147,13 +140,11 @@ func (s *inMemoryDeltaDistributionStore) ListMetrics(metricDescriptorName string
 	now := time.Now()
 	ttlWindowStart := now.Add(-s.ttl)
 
-	s.storeMutex.Lock()
-	entry := s.store[metricDescriptorName]
-	if entry == nil {
-		s.storeMutex.Unlock()
+	tmp, exists := s.store.Load(metricDescriptorName)
+	if !exists {
 		return output
 	}
-	s.storeMutex.Unlock()
+	entry := tmp.(*histogramEntry)
 
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
