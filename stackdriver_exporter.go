@@ -49,6 +49,10 @@ var (
 		"web.telemetry-path", "Path under which to expose Prometheus metrics.",
 	).Default("/metrics").String()
 
+	runtimeMetricsPath = kingpin.Flag(
+		"web.runtime-telemetry-path", "Path under which to expose Go runtime metrics.",
+	).Default("/metrics").String()
+
 	projectID = kingpin.Flag(
 		"google.project-id", "Comma seperated list of Google Project IDs.",
 	).String()
@@ -148,6 +152,7 @@ type handler struct {
 	projectIDs          []string
 	metricsPrefixes     []string
 	metricsExtraFilters []collectors.MetricFilter
+	additionalGatherer  prometheus.Gatherer
 	m                   *monitoring.Service
 }
 
@@ -166,12 +171,13 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters []collectors.MetricFilter, m *monitoring.Service, logger log.Logger) *handler {
+func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters []collectors.MetricFilter, m *monitoring.Service, logger log.Logger, additionalGatherer prometheus.Gatherer) *handler {
 	h := &handler{
 		logger:              logger,
 		projectIDs:          projectIDs,
 		metricsPrefixes:     metricPrefixes,
 		metricsExtraFilters: metricExtraFilters,
+		additionalGatherer:  additionalGatherer,
 		m:                   m,
 	}
 
@@ -198,10 +204,12 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 		}
 		registry.MustRegister(monitoringCollector)
 	}
-
-	gatherers := prometheus.Gatherers{
-		prometheus.DefaultGatherer,
-		registry,
+	var gatherers prometheus.Gatherer = registry
+	if h.additionalGatherer != nil {
+		gatherers = prometheus.Gatherers{
+			h.additionalGatherer,
+			registry,
+		}
 	}
 
 	// Delegate http serving to Prometheus client library, which will call collector.Collect.
@@ -257,7 +265,16 @@ func main() {
 	projectIDs := strings.Split(*projectID, ",")
 	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
 	metricExtraFilters := parseMetricExtraFilters()
-	handler := newHandler(projectIDs, metricsTypePrefixes, metricExtraFilters, monitoringService, logger)
+
+	additionalGatherer := prometheus.DefaultGatherer
+
+	if *metricsPath != *runtimeMetricsPath {
+		level.Info(logger).Log("msg", "Serving runtime metrics at separate path", "path", *runtimeMetricsPath)
+		additionalGatherer = nil
+		http.Handle(*runtimeMetricsPath, promhttp.Handler())
+	}
+
+	handler := newHandler(projectIDs, metricsTypePrefixes, metricExtraFilters, monitoringService, logger, additionalGatherer)
 
 	http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
