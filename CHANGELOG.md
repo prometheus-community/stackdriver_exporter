@@ -1,5 +1,10 @@
 ## master / unreleased
 
+## 0.13.0 / 2022-11-15
+
+* [FEATURE] Add `web.stackdriver-telemetry-path` flag. When configured the stackdriver metrics go to this endpoint and 
+`web.telemetry-path` contain just the runtime metrics.
+
 ## 0.12.0 / 2022-02-08
 
 Breaking Changes:
