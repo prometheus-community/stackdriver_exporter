@@ -1,5 +1,9 @@
 ## master / unreleased
 
+## 0.13.0 / 2022-11-15
+
+* [FEATURE] Add `web.runtime-telemetry-path` flag. When present the go runtime metrics are served from a separate path #173
+
 ## 0.12.0 / 2022-02-08
 
 Breaking Changes:
