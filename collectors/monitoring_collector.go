@@ -30,6 +30,8 @@ import (
 	"github.com/prometheus-community/stackdriver_exporter/utils"
 )
 
+const namespace = "stackdriver"
+
 type MetricFilter struct {
 	Prefix   string
 	Modifier string
@@ -81,10 +83,12 @@ type MonitoringCollectorOptions struct {
 }
 
 func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, counterStore DeltaCounterStore, distributionStore DeltaDistributionStore) (*MonitoringCollector, error) {
+	const subsystem = "monitoring"
+
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Namespace:   "stackdriver",
-			Subsystem:   "monitoring",
+			Namespace:   namespace,
+			Subsystem:   subsystem,
 			Name:        "api_calls_total",
 			Help:        "Total number of Google Stackdriver Monitoring API calls made.",
 			ConstLabels: prometheus.Labels{"project_id": projectID},
@@ -93,8 +97,8 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 
 	scrapesTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Namespace:   "stackdriver",
-			Subsystem:   "monitoring",
+			Namespace:   namespace,
+			Subsystem:   subsystem,
 			Name:        "scrapes_total",
 			Help:        "Total number of Google Stackdriver Monitoring metrics scrapes.",
 			ConstLabels: prometheus.Labels{"project_id": projectID},
@@ -103,8 +107,8 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 
 	scrapeErrorsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Namespace:   "stackdriver",
-			Subsystem:   "monitoring",
+			Namespace:   namespace,
+			Subsystem:   subsystem,
 			Name:        "scrape_errors_total",
 			Help:        "Total number of Google Stackdriver Monitoring metrics scrape errors.",
 			ConstLabels: prometheus.Labels{"project_id": projectID},
@@ -113,8 +117,8 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 
 	lastScrapeErrorMetric := prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Namespace:   "stackdriver",
-			Subsystem:   "monitoring",
+			Namespace:   namespace,
+			Subsystem:   subsystem,
 			Name:        "last_scrape_error",
 			Help:        "Whether the last metrics scrape from Google Stackdriver Monitoring resulted in an error (1 for error, 0 for success).",
 			ConstLabels: prometheus.Labels{"project_id": projectID},
@@ -123,8 +127,8 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 
 	lastScrapeTimestampMetric := prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Namespace:   "stackdriver",
-			Subsystem:   "monitoring",
+			Namespace:   namespace,
+			Subsystem:   subsystem,
 			Name:        "last_scrape_timestamp",
 			Help:        "Number of seconds since 1970 since last metrics scrape from Google Stackdriver Monitoring.",
 			ConstLabels: prometheus.Labels{"project_id": projectID},
@@ -133,8 +137,8 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 
 	lastScrapeDurationSecondsMetric := prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Namespace:   "stackdriver",
-			Subsystem:   "monitoring",
+			Namespace:   namespace,
+			Subsystem:   subsystem,
 			Name:        "last_scrape_duration_seconds",
 			Help:        "Duration of the last metrics scrape from Google Stackdriver Monitoring.",
 			ConstLabels: prometheus.Labels{"project_id": projectID},
