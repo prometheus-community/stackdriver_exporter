@@ -49,8 +49,8 @@ var (
 		"web.telemetry-path", "Path under which to expose Prometheus metrics.",
 	).Default("/metrics").String()
 
-	runtimeMetricsPath = kingpin.Flag(
-		"web.runtime-telemetry-path", "Path under which to expose Go runtime metrics.",
+	stackdriverMetricsPath = kingpin.Flag(
+		"web.stackdriver-telemetry-path", "Path under which to expose Go runtime metrics.",
 	).Default("/metrics").String()
 
 	projectID = kingpin.Flag(
@@ -266,17 +266,18 @@ func main() {
 	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
 	metricExtraFilters := parseMetricExtraFilters()
 
-	additionalGatherer := prometheus.DefaultGatherer
-
-	if *metricsPath != *runtimeMetricsPath {
-		level.Info(logger).Log("msg", "Serving runtime metrics at separate path", "path", *runtimeMetricsPath)
-		additionalGatherer = nil
-		http.Handle(*runtimeMetricsPath, promhttp.Handler())
+	if *metricsPath == *stackdriverMetricsPath {
+		handler := newHandler(
+			projectIDs, metricsTypePrefixes, metricExtraFilters, monitoringService, logger, prometheus.DefaultGatherer)
+		http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
+	} else {
+		level.Info(logger).Log("msg", "Serving Stackdriver metrics at separate path", "path", *stackdriverMetricsPath)
+		handler := newHandler(
+			projectIDs, metricsTypePrefixes, metricExtraFilters, monitoringService, logger, nil)
+		http.Handle(*stackdriverMetricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
+		http.Handle(*metricsPath, promhttp.Handler())
 	}
 
-	handler := newHandler(projectIDs, metricsTypePrefixes, metricExtraFilters, monitoringService, logger, additionalGatherer)
-
-	http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<html>
              <head><title>Stackdriver Exporter</title></head>
