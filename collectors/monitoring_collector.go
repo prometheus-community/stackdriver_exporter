@@ -52,6 +52,9 @@ type MonitoringCollector struct {
 	collectorFillMissingLabels      bool
 	monitoringDropDelegatedProjects bool
 	logger                          log.Logger
+	deltaCounterStore               DeltaCounterStore
+	deltaDistributionStore          DeltaDistributionStore
+	aggregateDeltas                 bool
 }
 
 type MonitoringCollectorOptions struct {
@@ -73,9 +76,11 @@ type MonitoringCollectorOptions struct {
 	FillMissingLabels bool
 	// DropDelegatedProjects decides if only metrics matching the collector's projectID should be retrieved.
 	DropDelegatedProjects bool
+	// AggregateDeltas decides if DELTA metrics should be treated as a counter using the provided counterStore/distributionStore or a gauge
+	AggregateDeltas bool
 }
 
-func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger) (*MonitoringCollector, error) {
+func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, counterStore DeltaCounterStore, distributionStore DeltaDistributionStore) (*MonitoringCollector, error) {
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace:   "stackdriver",
@@ -153,6 +158,9 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		collectorFillMissingLabels:      opts.FillMissingLabels,
 		monitoringDropDelegatedProjects: opts.DropDelegatedProjects,
 		logger:                          logger,
+		deltaCounterStore:               counterStore,
+		deltaDistributionStore:          distributionStore,
+		aggregateDeltas:                 opts.AggregateDeltas,
 	}
 
 	return monitoringCollector, nil
@@ -171,7 +179,7 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 	var begun = time.Now()
 
 	errorMetric := float64(0)
-	if err := c.reportMonitoringMetrics(ch); err != nil {
+	if err := c.reportMonitoringMetrics(ch, begun); err != nil {
 		errorMetric = float64(1)
 		c.scrapeErrorsTotalMetric.Inc()
 		level.Error(c.logger).Log("msg", "Error while getting Google Stackdriver Monitoring metrics", "err", err)
@@ -193,7 +201,7 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 	c.lastScrapeDurationSecondsMetric.Collect(ch)
 }
 
-func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metric) error {
+func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metric, begun time.Time) error {
 	metricDescriptorsFunction := func(page *monitoring.ListMetricDescriptorsResponse) error {
 		var wg = &sync.WaitGroup{}
 
@@ -270,8 +278,8 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					if page == nil {
 						break
 					}
-					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch); err != nil {
-						level.Error(c.logger).Log("msg", "error reporting Time Series metrics for descripto", "descriptor", metricDescriptor.Type, "err", err)
+					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch, begun); err != nil {
+						level.Error(c.logger).Log("msg", "error reporting Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
 						errChannel <- err
 						break
 					}
@@ -317,6 +325,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 	wg.Wait()
 	close(errChannel)
 
+	level.Debug(c.logger).Log("msg", "Done reporting monitoring metrics")
 	return <-errChannel
 }
 
@@ -324,17 +333,21 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	page *monitoring.ListTimeSeriesResponse,
 	metricDescriptor *monitoring.MetricDescriptor,
 	ch chan<- prometheus.Metric,
+	begun time.Time,
 ) error {
 	var metricValue float64
 	var metricValueType prometheus.ValueType
 	var newestTSPoint *monitoring.Point
 
-	timeSeriesMetrics := &TimeSeriesMetrics{
-		metricDescriptor:  metricDescriptor,
-		ch:                ch,
-		fillMissingLabels: c.collectorFillMissingLabels,
-		constMetrics:      make(map[string][]ConstMetric),
-		histogramMetrics:  make(map[string][]HistogramMetric),
+	timeSeriesMetrics, err := NewTimeSeriesMetrics(metricDescriptor,
+		ch,
+		c.collectorFillMissingLabels,
+		c.deltaCounterStore,
+		c.deltaDistributionStore,
+		c.aggregateDeltas,
+	)
+	if err != nil {
+		return fmt.Errorf("error creating the TimeSeriesMetrics %v", err)
 	}
 	for _, timeSeries := range page.TimeSeries {
 		newestEndTime := time.Unix(0, 0)
@@ -388,7 +401,11 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 		case "GAUGE":
 			metricValueType = prometheus.GaugeValue
 		case "DELTA":
-			metricValueType = prometheus.GaugeValue
+			if c.aggregateDeltas {
+				metricValueType = prometheus.CounterValue
+			} else {
+				metricValueType = prometheus.GaugeValue
+			}
 		case "CUMULATIVE":
 			metricValueType = prometheus.CounterValue
 		default:
@@ -408,10 +425,12 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 		case "DISTRIBUTION":
 			dist := newestTSPoint.Value.DistributionValue
 			buckets, err := c.generateHistogramBuckets(dist)
+
 			if err == nil {
-				timeSeriesMetrics.CollectNewConstHistogram(timeSeries, newestEndTime, labelKeys, dist, buckets, labelValues)
+				timeSeriesMetrics.CollectNewConstHistogram(timeSeries, newestEndTime, labelKeys, dist, buckets, labelValues, timeSeries.MetricKind)
 			} else {
-				level.Debug(c.logger).Log("msg", "discarding", "resource", timeSeries.Resource.Type, "metric", timeSeries.Metric.Type, "err", err)
+				level.Debug(c.logger).Log("msg", "discarding", "resource", timeSeries.Resource.Type, "metric",
+					timeSeries.Metric.Type, "err", err)
 			}
 			continue
 		default:
@@ -419,9 +438,9 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			continue
 		}
 
-		timeSeriesMetrics.CollectNewConstMetric(timeSeries, newestEndTime, labelKeys, metricValueType, metricValue, labelValues)
+		timeSeriesMetrics.CollectNewConstMetric(timeSeries, newestEndTime, labelKeys, metricValueType, metricValue, labelValues, timeSeries.MetricKind)
 	}
-	timeSeriesMetrics.Complete()
+	timeSeriesMetrics.Complete(begun)
 	return nil
 }
 

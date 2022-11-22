@@ -61,16 +61,18 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 
 ### Flags
 
-| Flag                              | Required | Default | Description |
-| --------------------------------- | -------- | ------- | ----------- |
-| `google.project-id`               | No       | GCloud SDK auto-discovery | Comma seperated list of Google Project IDs |
-| `monitoring.metrics-ingest-delay` | No       |         | Offsets metric collection by a delay appropriate for each metric type, e.g. because bigquery metrics are slow to appear |
-| `monitoring.metrics-type-prefixes` | Yes      |         | Comma separated Google Stackdriver Monitoring Metric Type prefixes (see [example][metrics-prefix-example] and [available metrics][metrics-list]) |
-| `monitoring.metrics-interval`     | No       | `5m`    | Metric's timestamp interval to request from the Google Stackdriver Monitoring Metrics API. Only the most recent data point is used |
-| `monitoring.metrics-offset`       | No       | `0s`    | Offset (into the past) for the metric's timestamp interval to request from the Google Stackdriver Monitoring Metrics API, to handle latency in published metrics |
-| `monitoring.filters`              | No       |         | Formatted string to allow filtering on certain metrics type |
-| `web.listen-address`              | No       | `:9255` | Address to listen on for web interface and telemetry |
-| `web.telemetry-path`              | No       | `/metrics` | Path under which to expose Prometheus metrics |
+| Flag                              | Required | Default                   | Description                                                                                                                                                                                       |
+| --------------------------------- | -------- |---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `google.project-id`               | No       | GCloud SDK auto-discovery | Comma seperated list of Google Project IDs                                                                                                                                                        |
+| `monitoring.metrics-ingest-delay` | No       |                           | Offsets metric collection by a delay appropriate for each metric type, e.g. because bigquery metrics are slow to appear                                                                           |
+| `monitoring.metrics-type-prefixes` | Yes      |                           | Comma separated Google Stackdriver Monitoring Metric Type prefixes (see [example][metrics-prefix-example] and [available metrics][metrics-list])                                                  |
+| `monitoring.metrics-interval`     | No       | `5m`                      | Metric's timestamp interval to request from the Google Stackdriver Monitoring Metrics API. Only the most recent data point is used                                                                |
+| `monitoring.metrics-offset`       | No       | `0s`                      | Offset (into the past) for the metric's timestamp interval to request from the Google Stackdriver Monitoring Metrics API, to handle latency in published metrics                                  |
+| `monitoring.filters`              | No       |                           | Formatted string to allow filtering on certain metrics type                                                                                                                                       |
+| `monitoring.aggregate-deltas`     | No       |                           | If enabled will treat all DELTA metrics as an in-memory counter instead of a gauge. Be sure to read [what to know about aggregating DELTA metrics](#what-to-know-about-aggregating-delta-metrics) |
+| `monitoring.aggregate-deltas-ttl` | No       | `30m`                     | How long should a delta metric continue to be exported and stored after GCP stops producing it. Read [slow moving metrics](#slow-moving-metrics) to understand the problem this attempts to solve                                                                                                         |
+| `web.listen-address`              | No       | `:9255`                   | Address to listen on for web interface and telemetry                                                                                                                                              |
+| `web.telemetry-path`              | No       | `/metrics`                | Path under which to expose Prometheus metrics                                                                                                                                                     |
 
 ### Metrics
 
@@ -95,7 +97,9 @@ Metrics gathered from Google Stackdriver Monitoring are converted to Prometheus 
   3. the metric type labels (see [Metrics List][metrics-list])
   4. the monitored resource labels (see [Monitored Resource Types][monitored-resources])
 * For each timeseries, only the most recent data point is exported.
-* Stackdriver `GAUGE` and `DELTA` metric kinds are reported as Prometheus `Gauge` metrics; Stackdriver `CUMULATIVE` metric kinds are reported as Prometheus `Counter` metrics.
+* Stackdriver `GAUGE` metric kinds are reported as Prometheus `Gauge` metrics
+* Stackdriver `CUMULATIVE` metric kinds are reported as Prometheus `Counter` metrics.
+* Stackdriver `DELTA` metric kinds are reported as Prometheus `Gauge` metrics or an accumulating `Counter` if `monitoring.aggregate-deltas` is set
 * Only `BOOL`, `INT64`, `DOUBLE` and `DISTRIBUTION` metric types are supported, other types (`STRING` and `MONEY`) are discarded.
 * `DISTRIBUTION` metric type is reported as a Prometheus `Histogram`, except the `_sum` time series is not supported.
 
@@ -118,7 +122,7 @@ stackdriver_exporter \
  --monitoring.filters='pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match("us-west4.*my-team-subs.*")'
 ```
 
-## Filtering enabled collectors
+### Filtering enabled collectors
 
 The `stackdriver_exporter` collects all metrics type prefixes by default.
 
@@ -131,6 +135,31 @@ params:
   - compute.googleapis.com/instance/cpu
   - compute.googleapis.com/instance/disk
 ```
+
+### What to know about Aggregating DELTA Metrics
+
+Treating DELTA Metrics as a gauge produces data which is wildly inaccurate/not very useful (see https://github.com/prometheus-community/stackdriver_exporter/issues/116). However, aggregating the DELTA metrics overtime is not a perfect solution and is intended to produce data which mirrors GCP's data as close as possible. 
+
+The biggest challenge to producing a correct result is that a counter for prometheus does not start at 0, it starts at the first value which is exported. This can cause inconsistencies when the exporter first starts and for slow moving metrics which are described below.
+
+#### Start-up Delay
+
+When the exporter first starts it has no persisted counter information and the stores will be empty. When the first sample is received for a series it is intended to be a change from a previous value according to GCP, a delta. But the prometheus counter is not initialized to 0 so it does not export this as a change from 0, it exports that the counter started at the sample value. Since the series exported are dynamic it's not possible to export an [initial 0 value](https://prometheus.io/docs/practices/instrumentation/#avoid-missing-metrics) in order to account for this issue. The end result is that it can take a few cycles for aggregated metrics to start showing rates exactly as GCP. 
+
+As an example consider a prometheus query, `sum by(backend_target_name) (rate(stackdriver_https_lb_rule_loadbalancing_googleapis_com_https_request_bytes_count[1m]))` which is aggregating 5 series. All 5 series will need to have two samples from GCP in order for the query to produce the same result as GCP.
+
+#### Slow Moving Metrics
+
+A slow moving metric would be a metric which is not constantly changing with every sample from GCP. GCP does not consistently report slow moving metrics DELTA metrics. If this occurs for too long (default 5m) prometheus will mark the series as [stale](https://prometheus.io/docs/prometheus/latest/querying/basics/#staleness). The end result is that the next reported sample will be treated as the start of a new series and not an increment from the previous value. Here's an example of this in action, ![](https://user-images.githubusercontent.com/4571540/184961445-ed40237b-108e-4177-9d06-aafe61f92430.png)
+
+There are two features which attempt to combat this issue, 
+
+1. `monitoring.aggregate-deltas-ttl` which controls how long a metric is persisted in the data store after its no longer being reported by GCP
+1. Metrics which were not collected during a scrape are still exported at their current counter value
+
+The configuration when using `monitoring.aggregate-deltas` gives a 30 minute buffer to slower moving metrics and `monitoring.aggregate-deltas-ttl` can be adjusted to tune memory requirements vs correctness. Storing the data for longer results in a higher memory cost.
+
+The feature which continues to export metrics which are not collected can cause `the sample has been rejected because another sample with the same timestamp, but a different value, has already been ingested` if your [scrape config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config) for the exporter has `honor_timestamps` enabled (this is the default value). This is caused by the fact that it's not possible to know the different between GCP having late arriving data and GCP not exporting a value. The underlying counter is still incremented when this happens so the next reported sample will show a higher rate than expected.
 
 ## Contributing
 
