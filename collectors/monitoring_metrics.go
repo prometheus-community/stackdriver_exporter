@@ -29,7 +29,7 @@ func buildFQName(timeSeries *monitoring.TimeSeries) string {
 	// 1. namespace is a constant prefix (stackdriver)
 	// 2. subsystem is the monitored resource type (ie gce_instance)
 	// 3. name is the metric type (ie compute.googleapis.com/instance/cpu/usage_time)
-	return prometheus.BuildFQName("stackdriver", utils.NormalizeMetricName(timeSeries.Resource.Type), utils.NormalizeMetricName(timeSeries.Metric.Type))
+	return prometheus.BuildFQName(namespace, utils.NormalizeMetricName(timeSeries.Resource.Type), utils.NormalizeMetricName(timeSeries.Metric.Type))
 }
 
 type timeSeriesMetrics struct {
