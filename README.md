@@ -1,5 +1,11 @@
 # Google Stackdriver Prometheus Exporter
 [![Build Status](https://circleci.com/gh/prometheus-community/stackdriver_exporter.svg?style=svg)](https://circleci.com/gh/prometheus-community/stackdriver_exporter)
+[![golangci-lint](https://github.com/prometheus-community/stackdriver_exporter/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/prometheus-community/stackdriver_exporter/actions/workflows/golangci-lint.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/prometheus-community/stackdriver_exporter)](https://goreportcard.com/report/github.com/prometheus-community/stackdriver_exporter)
+[![GoDoc](https://pkg.go.dev/badge/github.com/prometheus-community/stackdriver_exporter?status.svg)](https://pkg.go.dev/github.com/prometheus-community/stackdriver_exporter?tab=doc)
+[![Release](https://img.shields.io/github/v/release/prometheus-community/stackdriver_exporter)](https://github.com/prometheus-community/stackdriver_exporter/releases)
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/prometheus-community/stackdriver_exporter)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 A [Prometheus][prometheus] exporter for [Google Stackdriver Monitoring][stackdriver] metrics. It acts as a proxy that requests Stackdriver API for the metric's time-series everytime prometheus scrapes it.
 
