@@ -88,7 +88,8 @@ type ConstMetric struct {
 type HistogramMetric struct {
 	fqName      string
 	labelKeys   []string
-	dist        *monitoring.Distribution
+	mean        float64
+	count       uint64
 	buckets     map[float64]uint64
 	labelValues []string
 	reportTime  time.Time
@@ -104,12 +105,12 @@ func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 		v = HistogramMetric{
 			fqName:      fqName,
 			labelKeys:   labelKeys,
-			dist:        dist,
+			mean:        dist.Mean,
+			count:       uint64(dist.Count),
 			buckets:     buckets,
 			labelValues: labelValues,
 			reportTime:  reportTime,
-
-			keysHash: hashLabelKeys(labelKeys),
+			keysHash:    hashLabelKeys(labelKeys),
 		}
 	}
 
@@ -127,16 +128,16 @@ func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 		return
 	}
 
-	t.ch <- t.newConstHistogram(fqName, reportTime, labelKeys, dist, buckets, labelValues)
+	t.ch <- t.newConstHistogram(fqName, reportTime, labelKeys, dist.Mean, uint64(dist.Count), buckets, labelValues)
 }
 
-func (t *timeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
+func (t *timeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Time, labelKeys []string, mean float64, count uint64, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
 	return prometheus.NewMetricWithTimestamp(
 		reportTime,
 		prometheus.MustNewConstHistogram(
 			t.newMetricDesc(fqName, labelKeys),
-			uint64(dist.Count),
-			dist.Mean*float64(dist.Count), // Stackdriver does not provide the sum, but we can fake it
+			count,
+			mean*float64(count), // Stackdriver does not provide the sum, but we can fake it
 			buckets,
 			labelValues...,
 		),
@@ -242,7 +243,7 @@ func (t *timeSeriesMetrics) completeHistogramMetrics(histograms map[string][]*Hi
 			}
 		}
 		for _, v := range vs {
-			t.ch <- t.newConstHistogram(v.fqName, v.reportTime, v.labelKeys, v.dist, v.buckets, v.labelValues)
+			t.ch <- t.newConstHistogram(v.fqName, v.reportTime, v.labelKeys, v.mean, v.count, v.buckets, v.labelValues)
 		}
 	}
 }
@@ -310,7 +311,8 @@ func (t *timeSeriesMetrics) completeDeltaHistogramMetrics(reportingStartTime tim
 					collected.histogram.fqName,
 					collected.histogram.reportTime,
 					collected.histogram.labelKeys,
-					collected.histogram.dist,
+					collected.histogram.mean,
+					collected.histogram.count,
 					collected.histogram.buckets,
 					collected.histogram.labelValues,
 				)

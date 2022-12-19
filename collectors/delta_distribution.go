@@ -120,8 +120,8 @@ func mergeHistograms(existing *HistogramMetric, current *HistogramMetric) *Histo
 	}
 
 	// Calculate a new mean and overall count
-	mean := existing.dist.Mean
-	mean += current.dist.Mean
+	mean := existing.mean
+	mean += current.mean
 	mean /= 2
 
 	var count uint64
@@ -129,8 +129,8 @@ func mergeHistograms(existing *HistogramMetric, current *HistogramMetric) *Histo
 		count += v
 	}
 
-	current.dist.Mean = mean
-	current.dist.Count = int64(count)
+	current.mean = mean
+	current.count = count
 
 	return current
 }
