@@ -80,26 +80,26 @@ func (s *inMemoryDeltaDistributionStore) Increment(metricDescriptor *monitoring.
 	existing := entry.collected[key]
 
 	if existing == nil {
-		level.Debug(s.logger).Log("msg", "Tracking new histogram", "fqName", currentValue.fqName, "key", key, "incoming_time", currentValue.reportTime)
+		level.Debug(s.logger).Log("msg", "Tracking new histogram", "fqName", currentValue.FqName, "key", key, "incoming_time", currentValue.ReportTime)
 		entry.collected[key] = &CollectedHistogram{histogram: currentValue, lastCollectedAt: time.Now()}
 		return
 	}
 
-	if existing.histogram.reportTime.Before(currentValue.reportTime) {
-		level.Debug(s.logger).Log("msg", "Incrementing existing histogram", "fqName", currentValue.fqName, "key", key, "last_reported_time", existing.histogram.reportTime, "incoming_time", currentValue.reportTime)
+	if existing.histogram.ReportTime.Before(currentValue.ReportTime) {
+		level.Debug(s.logger).Log("msg", "Incrementing existing histogram", "fqName", currentValue.FqName, "key", key, "last_reported_time", existing.histogram.ReportTime, "incoming_time", currentValue.ReportTime)
 		existing.histogram = mergeHistograms(existing.histogram, currentValue)
 		existing.lastCollectedAt = time.Now()
 		return
 	}
 
-	level.Debug(s.logger).Log("msg", "Ignoring old sample for histogram", "fqName", currentValue.fqName, "key", key, "last_reported_time", existing.histogram.reportTime, "incoming_time", currentValue.reportTime)
+	level.Debug(s.logger).Log("msg", "Ignoring old sample for histogram", "fqName", currentValue.FqName, "key", key, "last_reported_time", existing.histogram.ReportTime, "incoming_time", currentValue.ReportTime)
 }
 
 func toHistogramKey(hist *HistogramMetric) uint64 {
 	labels := make(map[string]string)
-	keysCopy := append([]string{}, hist.labelKeys...)
-	for i := range hist.labelKeys {
-		labels[hist.labelKeys[i]] = hist.labelValues[i]
+	keysCopy := append([]string{}, hist.LabelKeys...)
+	for i := range hist.LabelKeys {
+		labels[hist.LabelKeys[i]] = hist.LabelValues[i]
 	}
 	sort.Strings(keysCopy)
 
@@ -107,7 +107,7 @@ func toHistogramKey(hist *HistogramMetric) uint64 {
 	for _, k := range keysCopy {
 		keyParts = append(keyParts, fmt.Sprintf("%s:%s", k, labels[k]))
 	}
-	hashText := fmt.Sprintf("%s|%s", hist.fqName, strings.Join(keyParts, "|"))
+	hashText := fmt.Sprintf("%s|%s", hist.FqName, strings.Join(keyParts, "|"))
 	h := hashNew()
 	h = hashAdd(h, hashText)
 
@@ -115,22 +115,22 @@ func toHistogramKey(hist *HistogramMetric) uint64 {
 }
 
 func mergeHistograms(existing *HistogramMetric, current *HistogramMetric) *HistogramMetric {
-	for key, value := range existing.buckets {
-		current.buckets[key] += value
+	for key, value := range existing.Buckets {
+		current.Buckets[key] += value
 	}
 
 	// Calculate a new mean and overall count
-	mean := existing.mean
-	mean += current.mean
+	mean := existing.Mean
+	mean += current.Mean
 	mean /= 2
 
 	var count uint64
-	for _, v := range current.buckets {
+	for _, v := range current.Buckets {
 		count += v
 	}
 
-	current.mean = mean
-	current.count = count
+	current.Mean = mean
+	current.Count = count
 
 	return current
 }
@@ -151,12 +151,12 @@ func (s *inMemoryDeltaDistributionStore) ListMetrics(metricDescriptorName string
 	for key, collected := range entry.collected {
 		//Scan and remove metrics which are outside the TTL
 		if ttlWindowStart.After(collected.lastCollectedAt) {
-			level.Debug(s.logger).Log("msg", "Deleting histogram entry outside of TTL", "key", key, "fqName", collected.histogram.fqName)
+			level.Debug(s.logger).Log("msg", "Deleting histogram entry outside of TTL", "key", key, "fqName", collected.histogram.FqName)
 			delete(entry.collected, key)
 			continue
 		}
 
-		metrics, exists := output[collected.histogram.fqName]
+		metrics, exists := output[collected.histogram.FqName]
 		if !exists {
 			metrics = make([]*CollectedHistogram, 0)
 		}
@@ -165,7 +165,7 @@ func (s *inMemoryDeltaDistributionStore) ListMetrics(metricDescriptorName string
 			histogram:       &histCopy,
 			lastCollectedAt: collected.lastCollectedAt,
 		}
-		output[collected.histogram.fqName] = append(metrics, &outputEntry)
+		output[collected.histogram.FqName] = append(metrics, &outputEntry)
 	}
 
 	return output

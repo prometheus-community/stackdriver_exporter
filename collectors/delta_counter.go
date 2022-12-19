@@ -80,27 +80,27 @@ func (s *inMemoryDeltaCounterStore) Increment(metricDescriptor *monitoring.Metri
 	existing := entry.collected[key]
 
 	if existing == nil {
-		level.Debug(s.logger).Log("msg", "Tracking new counter", "fqName", currentValue.fqName, "key", key, "current_value", currentValue.value, "incoming_time", currentValue.reportTime)
+		level.Debug(s.logger).Log("msg", "Tracking new counter", "fqName", currentValue.FqName, "key", key, "current_value", currentValue.Value, "incoming_time", currentValue.ReportTime)
 		entry.collected[key] = &CollectedMetric{currentValue, time.Now()}
 		return
 	}
 
-	if existing.metric.reportTime.Before(currentValue.reportTime) {
-		level.Debug(s.logger).Log("msg", "Incrementing existing counter", "fqName", currentValue.fqName, "key", key, "current_value", existing.metric.value, "adding", currentValue.value, "last_reported_time", entry.collected[key].metric.reportTime, "incoming_time", currentValue.reportTime)
-		currentValue.value = currentValue.value + existing.metric.value
+	if existing.metric.ReportTime.Before(currentValue.ReportTime) {
+		level.Debug(s.logger).Log("msg", "Incrementing existing counter", "fqName", currentValue.FqName, "key", key, "current_value", existing.metric.Value, "adding", currentValue.Value, "last_reported_time", entry.collected[key].metric.ReportTime, "incoming_time", currentValue.ReportTime)
+		currentValue.Value = currentValue.Value + existing.metric.Value
 		existing.metric = currentValue
 		existing.lastCollectedAt = time.Now()
 		return
 	}
 
-	level.Debug(s.logger).Log("msg", "Ignoring old sample for counter", "fqName", currentValue.fqName, "key", key, "last_reported_time", existing.metric.reportTime, "incoming_time", currentValue.reportTime)
+	level.Debug(s.logger).Log("msg", "Ignoring old sample for counter", "fqName", currentValue.FqName, "key", key, "last_reported_time", existing.metric.ReportTime, "incoming_time", currentValue.ReportTime)
 }
 
 func toCounterKey(c *ConstMetric) uint64 {
 	labels := make(map[string]string)
-	keysCopy := append([]string{}, c.labelKeys...)
-	for i := range c.labelKeys {
-		labels[c.labelKeys[i]] = c.labelValues[i]
+	keysCopy := append([]string{}, c.LabelKeys...)
+	for i := range c.LabelKeys {
+		labels[c.LabelKeys[i]] = c.LabelValues[i]
 	}
 	sort.Strings(keysCopy)
 
@@ -108,7 +108,7 @@ func toCounterKey(c *ConstMetric) uint64 {
 	for _, k := range keysCopy {
 		keyParts = append(keyParts, fmt.Sprintf("%s:%s", k, labels[k]))
 	}
-	hashText := fmt.Sprintf("%s|%s", c.fqName, strings.Join(keyParts, "|"))
+	hashText := fmt.Sprintf("%s|%s", c.FqName, strings.Join(keyParts, "|"))
 	h := hashNew()
 	h = hashAdd(h, hashText)
 
@@ -131,12 +131,12 @@ func (s *inMemoryDeltaCounterStore) ListMetrics(metricDescriptorName string) map
 	for key, collected := range entry.collected {
 		//Scan and remove metrics which are outside the TTL
 		if ttlWindowStart.After(collected.lastCollectedAt) {
-			level.Debug(s.logger).Log("msg", "Deleting counter entry outside of TTL", "key", key, "fqName", collected.metric.fqName)
+			level.Debug(s.logger).Log("msg", "Deleting counter entry outside of TTL", "key", key, "fqName", collected.metric.FqName)
 			delete(entry.collected, key)
 			continue
 		}
 
-		metrics, exists := output[collected.metric.fqName]
+		metrics, exists := output[collected.metric.FqName]
 		if !exists {
 			metrics = make([]*CollectedMetric, 0)
 		}
@@ -145,7 +145,7 @@ func (s *inMemoryDeltaCounterStore) ListMetrics(metricDescriptorName string) map
 			metric:          &metricCopy,
 			lastCollectedAt: collected.lastCollectedAt,
 		}
-		output[collected.metric.fqName] = append(metrics, &outputEntry)
+		output[collected.metric.FqName] = append(metrics, &outputEntry)
 	}
 
 	return output

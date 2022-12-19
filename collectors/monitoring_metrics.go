@@ -75,26 +75,26 @@ func (t *timeSeriesMetrics) newMetricDesc(fqName string, labelKeys []string) *pr
 }
 
 type ConstMetric struct {
-	fqName      string
-	labelKeys   []string
-	valueType   prometheus.ValueType
-	value       float64
-	labelValues []string
-	reportTime  time.Time
+	FqName      string
+	LabelKeys   []string
+	ValueType   prometheus.ValueType
+	Value       float64
+	LabelValues []string
+	ReportTime  time.Time
 
-	keysHash uint64
+	KeysHash uint64
 }
 
 type HistogramMetric struct {
-	fqName      string
-	labelKeys   []string
-	mean        float64
-	count       uint64
-	buckets     map[float64]uint64
-	labelValues []string
-	reportTime  time.Time
+	FqName      string
+	LabelKeys   []string
+	Mean        float64
+	Count       uint64
+	Buckets     map[float64]uint64
+	LabelValues []string
+	ReportTime  time.Time
 
-	keysHash uint64
+	KeysHash uint64
 }
 
 func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string, metricKind string) {
@@ -103,14 +103,14 @@ func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 	var v HistogramMetric
 	if t.fillMissingLabels || (metricKind == "DELTA" && t.aggregateDeltas) {
 		v = HistogramMetric{
-			fqName:      fqName,
-			labelKeys:   labelKeys,
-			mean:        dist.Mean,
-			count:       uint64(dist.Count),
-			buckets:     buckets,
-			labelValues: labelValues,
-			reportTime:  reportTime,
-			keysHash:    hashLabelKeys(labelKeys),
+			FqName:      fqName,
+			LabelKeys:   labelKeys,
+			Mean:        dist.Mean,
+			Count:       uint64(dist.Count),
+			Buckets:     buckets,
+			LabelValues: labelValues,
+			ReportTime:  reportTime,
+			KeysHash:    hashLabelKeys(labelKeys),
 		}
 	}
 
@@ -150,14 +150,14 @@ func (t *timeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSer
 	var v ConstMetric
 	if t.fillMissingLabels || (metricKind == "DELTA" && t.aggregateDeltas) {
 		v = ConstMetric{
-			fqName:      fqName,
-			labelKeys:   labelKeys,
-			valueType:   metricValueType,
-			value:       metricValue,
-			labelValues: labelValues,
-			reportTime:  reportTime,
+			FqName:      fqName,
+			LabelKeys:   labelKeys,
+			ValueType:   metricValueType,
+			Value:       metricValue,
+			LabelValues: labelValues,
+			ReportTime:  reportTime,
 
-			keysHash: hashLabelKeys(labelKeys),
+			KeysHash: hashLabelKeys(labelKeys),
 		}
 	}
 
@@ -214,7 +214,7 @@ func (t *timeSeriesMetrics) completeConstMetrics(constMetrics map[string][]*Cons
 		if len(vs) > 1 {
 			var needFill bool
 			for i := 1; i < len(vs); i++ {
-				if vs[0].keysHash != vs[i].keysHash {
+				if vs[0].KeysHash != vs[i].KeysHash {
 					needFill = true
 				}
 			}
@@ -224,7 +224,7 @@ func (t *timeSeriesMetrics) completeConstMetrics(constMetrics map[string][]*Cons
 		}
 
 		for _, v := range vs {
-			t.ch <- t.newConstMetric(v.fqName, v.reportTime, v.labelKeys, v.valueType, v.value, v.labelValues)
+			t.ch <- t.newConstMetric(v.FqName, v.ReportTime, v.LabelKeys, v.ValueType, v.Value, v.LabelValues)
 		}
 	}
 }
@@ -234,7 +234,7 @@ func (t *timeSeriesMetrics) completeHistogramMetrics(histograms map[string][]*Hi
 		if len(vs) > 1 {
 			var needFill bool
 			for i := 1; i < len(vs); i++ {
-				if vs[0].keysHash != vs[i].keysHash {
+				if vs[0].KeysHash != vs[i].KeysHash {
 					needFill = true
 				}
 			}
@@ -243,7 +243,7 @@ func (t *timeSeriesMetrics) completeHistogramMetrics(histograms map[string][]*Hi
 			}
 		}
 		for _, v := range vs {
-			t.ch <- t.newConstHistogram(v.fqName, v.reportTime, v.labelKeys, v.mean, v.count, v.buckets, v.labelValues)
+			t.ch <- t.newConstHistogram(v.FqName, v.ReportTime, v.LabelKeys, v.Mean, v.Count, v.Buckets, v.LabelValues)
 		}
 	}
 }
@@ -260,22 +260,22 @@ func (t *timeSeriesMetrics) completeDeltaConstMetrics(reportingStartTime time.Ti
 				// Ideally we could use monitoring.MetricDescriptorMetadata.SamplePeriod to determine how many
 				// samples were missed to adjust this but monitoring.MetricDescriptorMetadata is viewed as optional
 				// for a monitoring.MetricDescriptor
-				reportingLag := collected.lastCollectedAt.Sub(collected.metric.reportTime).Truncate(time.Minute)
-				collected.metric.reportTime = now.Add(-reportingLag)
+				reportingLag := collected.lastCollectedAt.Sub(collected.metric.ReportTime).Truncate(time.Minute)
+				collected.metric.ReportTime = now.Add(-reportingLag)
 			}
 			if t.fillMissingLabels {
-				if _, exists := constMetrics[collected.metric.fqName]; !exists {
-					constMetrics[collected.metric.fqName] = []*ConstMetric{}
+				if _, exists := constMetrics[collected.metric.FqName]; !exists {
+					constMetrics[collected.metric.FqName] = []*ConstMetric{}
 				}
-				constMetrics[collected.metric.fqName] = append(constMetrics[collected.metric.fqName], collected.metric)
+				constMetrics[collected.metric.FqName] = append(constMetrics[collected.metric.FqName], collected.metric)
 			} else {
 				t.ch <- t.newConstMetric(
-					collected.metric.fqName,
-					collected.metric.reportTime,
-					collected.metric.labelKeys,
-					collected.metric.valueType,
-					collected.metric.value,
-					collected.metric.labelValues,
+					collected.metric.FqName,
+					collected.metric.ReportTime,
+					collected.metric.LabelKeys,
+					collected.metric.ValueType,
+					collected.metric.Value,
+					collected.metric.LabelValues,
 				)
 			}
 		}
@@ -298,23 +298,23 @@ func (t *timeSeriesMetrics) completeDeltaHistogramMetrics(reportingStartTime tim
 				// Ideally we could use monitoring.MetricDescriptorMetadata.SamplePeriod to determine how many
 				// samples were missed to adjust this but monitoring.MetricDescriptorMetadata is viewed as optional
 				// for a monitoring.MetricDescriptor
-				reportingLag := collected.lastCollectedAt.Sub(collected.histogram.reportTime).Truncate(time.Minute)
-				collected.histogram.reportTime = now.Add(-reportingLag)
+				reportingLag := collected.lastCollectedAt.Sub(collected.histogram.ReportTime).Truncate(time.Minute)
+				collected.histogram.ReportTime = now.Add(-reportingLag)
 			}
 			if t.fillMissingLabels {
-				if _, exists := histograms[collected.histogram.fqName]; !exists {
-					histograms[collected.histogram.fqName] = []*HistogramMetric{}
+				if _, exists := histograms[collected.histogram.FqName]; !exists {
+					histograms[collected.histogram.FqName] = []*HistogramMetric{}
 				}
-				histograms[collected.histogram.fqName] = append(histograms[collected.histogram.fqName], collected.histogram)
+				histograms[collected.histogram.FqName] = append(histograms[collected.histogram.FqName], collected.histogram)
 			} else {
 				t.ch <- t.newConstHistogram(
-					collected.histogram.fqName,
-					collected.histogram.reportTime,
-					collected.histogram.labelKeys,
-					collected.histogram.mean,
-					collected.histogram.count,
-					collected.histogram.buckets,
-					collected.histogram.labelValues,
+					collected.histogram.FqName,
+					collected.histogram.ReportTime,
+					collected.histogram.LabelKeys,
+					collected.histogram.Mean,
+					collected.histogram.Count,
+					collected.histogram.Buckets,
+					collected.histogram.LabelValues,
 				)
 			}
 		}
@@ -328,21 +328,21 @@ func (t *timeSeriesMetrics) completeDeltaHistogramMetrics(reportingStartTime tim
 func fillConstMetricsLabels(metrics []*ConstMetric) []*ConstMetric {
 	allKeys := make(map[string]struct{})
 	for _, metric := range metrics {
-		for _, key := range metric.labelKeys {
+		for _, key := range metric.LabelKeys {
 			allKeys[key] = struct{}{}
 		}
 	}
 
 	for _, metric := range metrics {
-		if len(metric.labelKeys) != len(allKeys) {
+		if len(metric.LabelKeys) != len(allKeys) {
 			metricKeys := make(map[string]struct{})
-			for _, key := range metric.labelKeys {
+			for _, key := range metric.LabelKeys {
 				metricKeys[key] = struct{}{}
 			}
 			for key := range allKeys {
 				if _, ok := metricKeys[key]; !ok {
-					metric.labelKeys = append(metric.labelKeys, key)
-					metric.labelValues = append(metric.labelValues, "")
+					metric.LabelKeys = append(metric.LabelKeys, key)
+					metric.LabelValues = append(metric.LabelValues, "")
 				}
 			}
 		}
@@ -354,21 +354,21 @@ func fillConstMetricsLabels(metrics []*ConstMetric) []*ConstMetric {
 func fillHistogramMetricsLabels(metrics []*HistogramMetric) []*HistogramMetric {
 	allKeys := make(map[string]struct{})
 	for _, metric := range metrics {
-		for _, key := range metric.labelKeys {
+		for _, key := range metric.LabelKeys {
 			allKeys[key] = struct{}{}
 		}
 	}
 
 	for _, metric := range metrics {
-		if len(metric.labelKeys) != len(allKeys) {
+		if len(metric.LabelKeys) != len(allKeys) {
 			metricKeys := make(map[string]struct{})
-			for _, key := range metric.labelKeys {
+			for _, key := range metric.LabelKeys {
 				metricKeys[key] = struct{}{}
 			}
 			for key := range allKeys {
 				if _, ok := metricKeys[key]; !ok {
-					metric.labelKeys = append(metric.labelKeys, key)
-					metric.labelValues = append(metric.labelValues, "")
+					metric.LabelKeys = append(metric.LabelKeys, key)
+					metric.LabelValues = append(metric.LabelValues, "")
 				}
 			}
 		}
