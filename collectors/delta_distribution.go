@@ -39,7 +39,7 @@ type DeltaDistributionStore interface {
 	Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *HistogramMetric)
 
 	// ListMetrics will return all known entries in the store for a metricDescriptorName
-	ListMetrics(metricDescriptorName string) map[string][]*CollectedHistogram
+	ListMetrics(metricDescriptorName string) []*CollectedHistogram
 }
 
 type histogramEntry struct {
@@ -135,8 +135,8 @@ func mergeHistograms(existing *HistogramMetric, current *HistogramMetric) *Histo
 	return current
 }
 
-func (s *inMemoryDeltaDistributionStore) ListMetrics(metricDescriptorName string) map[string][]*CollectedHistogram {
-	output := map[string][]*CollectedHistogram{}
+func (s *inMemoryDeltaDistributionStore) ListMetrics(metricDescriptorName string) []*CollectedHistogram {
+	var output []*CollectedHistogram
 	now := time.Now()
 	ttlWindowStart := now.Add(-s.ttl)
 
@@ -156,16 +156,12 @@ func (s *inMemoryDeltaDistributionStore) ListMetrics(metricDescriptorName string
 			continue
 		}
 
-		metrics, exists := output[collected.histogram.FqName]
-		if !exists {
-			metrics = make([]*CollectedHistogram, 0)
-		}
 		histCopy := *collected.histogram
 		outputEntry := CollectedHistogram{
 			histogram:       &histCopy,
 			lastCollectedAt: collected.lastCollectedAt,
 		}
-		output[collected.histogram.FqName] = append(metrics, &outputEntry)
+		output = append(output, &outputEntry)
 	}
 
 	return output

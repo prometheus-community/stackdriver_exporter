@@ -39,7 +39,7 @@ type DeltaCounterStore interface {
 	Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *ConstMetric)
 
 	// ListMetrics will return all known entries in the store for a metricDescriptorName
-	ListMetrics(metricDescriptorName string) map[string][]*CollectedMetric
+	ListMetrics(metricDescriptorName string) []*CollectedMetric
 }
 
 type metricEntry struct {
@@ -115,8 +115,8 @@ func toCounterKey(c *ConstMetric) uint64 {
 	return h
 }
 
-func (s *inMemoryDeltaCounterStore) ListMetrics(metricDescriptorName string) map[string][]*CollectedMetric {
-	output := map[string][]*CollectedMetric{}
+func (s *inMemoryDeltaCounterStore) ListMetrics(metricDescriptorName string) []*CollectedMetric {
+	var output []*CollectedMetric
 	now := time.Now()
 	ttlWindowStart := now.Add(-s.ttl)
 
@@ -135,17 +135,12 @@ func (s *inMemoryDeltaCounterStore) ListMetrics(metricDescriptorName string) map
 			delete(entry.collected, key)
 			continue
 		}
-
-		metrics, exists := output[collected.metric.FqName]
-		if !exists {
-			metrics = make([]*CollectedMetric, 0)
-		}
 		metricCopy := *collected.metric
 		outputEntry := CollectedMetric{
 			metric:          &metricCopy,
 			lastCollectedAt: collected.lastCollectedAt,
 		}
-		output[collected.metric.FqName] = append(metrics, &outputEntry)
+		output = append(output, &outputEntry)
 	}
 
 	return output

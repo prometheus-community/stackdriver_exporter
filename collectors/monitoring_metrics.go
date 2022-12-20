@@ -253,31 +253,29 @@ func (t *timeSeriesMetrics) completeDeltaConstMetrics(reportingStartTime time.Ti
 	now := time.Now().Truncate(time.Minute)
 
 	constMetrics := map[string][]*ConstMetric{}
-	for _, metrics := range descriptorMetrics {
-		for _, collected := range metrics {
-			// If the metric wasn't collected we should still export it at the next sample time to avoid staleness
-			if reportingStartTime.After(collected.lastCollectedAt) {
-				// Ideally we could use monitoring.MetricDescriptorMetadata.SamplePeriod to determine how many
-				// samples were missed to adjust this but monitoring.MetricDescriptorMetadata is viewed as optional
-				// for a monitoring.MetricDescriptor
-				reportingLag := collected.lastCollectedAt.Sub(collected.metric.ReportTime).Truncate(time.Minute)
-				collected.metric.ReportTime = now.Add(-reportingLag)
+	for _, collected := range descriptorMetrics {
+		// If the metric wasn't collected we should still export it at the next sample time to avoid staleness
+		if reportingStartTime.After(collected.lastCollectedAt) {
+			// Ideally we could use monitoring.MetricDescriptorMetadata.SamplePeriod to determine how many
+			// samples were missed to adjust this but monitoring.MetricDescriptorMetadata is viewed as optional
+			// for a monitoring.MetricDescriptor
+			reportingLag := collected.lastCollectedAt.Sub(collected.metric.ReportTime).Truncate(time.Minute)
+			collected.metric.ReportTime = now.Add(-reportingLag)
+		}
+		if t.fillMissingLabels {
+			if _, exists := constMetrics[collected.metric.FqName]; !exists {
+				constMetrics[collected.metric.FqName] = []*ConstMetric{}
 			}
-			if t.fillMissingLabels {
-				if _, exists := constMetrics[collected.metric.FqName]; !exists {
-					constMetrics[collected.metric.FqName] = []*ConstMetric{}
-				}
-				constMetrics[collected.metric.FqName] = append(constMetrics[collected.metric.FqName], collected.metric)
-			} else {
-				t.ch <- t.newConstMetric(
-					collected.metric.FqName,
-					collected.metric.ReportTime,
-					collected.metric.LabelKeys,
-					collected.metric.ValueType,
-					collected.metric.Value,
-					collected.metric.LabelValues,
-				)
-			}
+			constMetrics[collected.metric.FqName] = append(constMetrics[collected.metric.FqName], collected.metric)
+		} else {
+			t.ch <- t.newConstMetric(
+				collected.metric.FqName,
+				collected.metric.ReportTime,
+				collected.metric.LabelKeys,
+				collected.metric.ValueType,
+				collected.metric.Value,
+				collected.metric.LabelValues,
+			)
 		}
 	}
 
@@ -291,32 +289,31 @@ func (t *timeSeriesMetrics) completeDeltaHistogramMetrics(reportingStartTime tim
 	now := time.Now().Truncate(time.Minute)
 
 	histograms := map[string][]*HistogramMetric{}
-	for _, metrics := range descriptorMetrics {
-		for _, collected := range metrics {
-			// If the histogram wasn't collected we should still export it at the next sample time to avoid staleness
-			if reportingStartTime.After(collected.lastCollectedAt) {
-				// Ideally we could use monitoring.MetricDescriptorMetadata.SamplePeriod to determine how many
-				// samples were missed to adjust this but monitoring.MetricDescriptorMetadata is viewed as optional
-				// for a monitoring.MetricDescriptor
-				reportingLag := collected.lastCollectedAt.Sub(collected.histogram.ReportTime).Truncate(time.Minute)
-				collected.histogram.ReportTime = now.Add(-reportingLag)
+	for _, collected := range descriptorMetrics {
+
+		// If the histogram wasn't collected we should still export it at the next sample time to avoid staleness
+		if reportingStartTime.After(collected.lastCollectedAt) {
+			// Ideally we could use monitoring.MetricDescriptorMetadata.SamplePeriod to determine how many
+			// samples were missed to adjust this but monitoring.MetricDescriptorMetadata is viewed as optional
+			// for a monitoring.MetricDescriptor
+			reportingLag := collected.lastCollectedAt.Sub(collected.histogram.ReportTime).Truncate(time.Minute)
+			collected.histogram.ReportTime = now.Add(-reportingLag)
+		}
+		if t.fillMissingLabels {
+			if _, exists := histograms[collected.histogram.FqName]; !exists {
+				histograms[collected.histogram.FqName] = []*HistogramMetric{}
 			}
-			if t.fillMissingLabels {
-				if _, exists := histograms[collected.histogram.FqName]; !exists {
-					histograms[collected.histogram.FqName] = []*HistogramMetric{}
-				}
-				histograms[collected.histogram.FqName] = append(histograms[collected.histogram.FqName], collected.histogram)
-			} else {
-				t.ch <- t.newConstHistogram(
-					collected.histogram.FqName,
-					collected.histogram.ReportTime,
-					collected.histogram.LabelKeys,
-					collected.histogram.Mean,
-					collected.histogram.Count,
-					collected.histogram.Buckets,
-					collected.histogram.LabelValues,
-				)
-			}
+			histograms[collected.histogram.FqName] = append(histograms[collected.histogram.FqName], collected.histogram)
+		} else {
+			t.ch <- t.newConstHistogram(
+				collected.histogram.FqName,
+				collected.histogram.ReportTime,
+				collected.histogram.LabelKeys,
+				collected.histogram.Mean,
+				collected.histogram.Count,
+				collected.histogram.Buckets,
+				collected.histogram.LabelValues,
+			)
 		}
 	}
 
