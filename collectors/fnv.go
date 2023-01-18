@@ -23,13 +23,13 @@ const (
 	prime64  = 1099511628211
 )
 
-// hashNew initializies a new fnv64a hash value.
-func hashNew() uint64 {
+// HashNew initializies a new fnv64a hash value.
+func HashNew() uint64 {
 	return offset64
 }
 
-// hashAdd adds a string to a fnv64a hash value, returning the updated hash.
-func hashAdd(h uint64, s string) uint64 {
+// HashAdd adds a string to a fnv64a hash value, returning the updated hash.
+func HashAdd(h uint64, s string) uint64 {
 	for i := 0; i < len(s); i++ {
 		h ^= uint64(s[i])
 		h *= prime64

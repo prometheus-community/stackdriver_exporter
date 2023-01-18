@@ -41,27 +41,27 @@ type timeSeriesMetrics struct {
 	constMetrics      map[string][]*ConstMetric
 	histogramMetrics  map[string][]*HistogramMetric
 
-	deltaCounterStore      DeltaCounterStore
-	deltaDistributionStore DeltaDistributionStore
-	aggregateDeltas        bool
+	counterStore    DeltaCounterStore
+	histogramStore  DeltaHistogramStore
+	aggregateDeltas bool
 }
 
 func NewTimeSeriesMetrics(descriptor *monitoring.MetricDescriptor,
 	ch chan<- prometheus.Metric,
 	fillMissingLabels bool,
-	deltaCounterStore DeltaCounterStore,
-	deltaDistributionStore DeltaDistributionStore,
+	counterStore DeltaCounterStore,
+	histogramStore DeltaHistogramStore,
 	aggregateDeltas bool) (*timeSeriesMetrics, error) {
 
 	return &timeSeriesMetrics{
-		metricDescriptor:       descriptor,
-		ch:                     ch,
-		fillMissingLabels:      fillMissingLabels,
-		constMetrics:           make(map[string][]*ConstMetric),
-		histogramMetrics:       make(map[string][]*HistogramMetric),
-		deltaCounterStore:      deltaCounterStore,
-		deltaDistributionStore: deltaDistributionStore,
-		aggregateDeltas:        aggregateDeltas,
+		metricDescriptor:  descriptor,
+		ch:                ch,
+		fillMissingLabels: fillMissingLabels,
+		constMetrics:      make(map[string][]*ConstMetric),
+		histogramMetrics:  make(map[string][]*HistogramMetric),
+		counterStore:      counterStore,
+		histogramStore:    histogramStore,
+		aggregateDeltas:   aggregateDeltas,
 	}, nil
 }
 
@@ -75,24 +75,26 @@ func (t *timeSeriesMetrics) newMetricDesc(fqName string, labelKeys []string) *pr
 }
 
 type ConstMetric struct {
-	FqName      string
-	LabelKeys   []string
-	ValueType   prometheus.ValueType
-	Value       float64
-	LabelValues []string
-	ReportTime  time.Time
+	FqName         string
+	LabelKeys      []string
+	ValueType      prometheus.ValueType
+	Value          float64
+	LabelValues    []string
+	ReportTime     time.Time
+	CollectionTime time.Time
 
 	KeysHash uint64
 }
 
 type HistogramMetric struct {
-	FqName      string
-	LabelKeys   []string
-	Mean        float64
-	Count       uint64
-	Buckets     map[float64]uint64
-	LabelValues []string
-	ReportTime  time.Time
+	FqName         string
+	LabelKeys      []string
+	Mean           float64
+	Count          uint64
+	Buckets        map[float64]uint64
+	LabelValues    []string
+	ReportTime     time.Time
+	CollectionTime time.Time
 
 	KeysHash uint64
 }
@@ -103,19 +105,21 @@ func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 	var v HistogramMetric
 	if t.fillMissingLabels || (metricKind == "DELTA" && t.aggregateDeltas) {
 		v = HistogramMetric{
-			FqName:      fqName,
-			LabelKeys:   labelKeys,
-			Mean:        dist.Mean,
-			Count:       uint64(dist.Count),
-			Buckets:     buckets,
-			LabelValues: labelValues,
-			ReportTime:  reportTime,
-			KeysHash:    hashLabelKeys(labelKeys),
+			FqName:         fqName,
+			LabelKeys:      labelKeys,
+			Mean:           dist.Mean,
+			Count:          uint64(dist.Count),
+			Buckets:        buckets,
+			LabelValues:    labelValues,
+			ReportTime:     reportTime,
+			CollectionTime: time.Now(),
+
+			KeysHash: hashLabelKeys(labelKeys),
 		}
 	}
 
 	if metricKind == "DELTA" && t.aggregateDeltas {
-		t.deltaDistributionStore.Increment(t.metricDescriptor, &v)
+		t.histogramStore.Increment(t.metricDescriptor, &v)
 		return
 	}
 
@@ -150,19 +154,20 @@ func (t *timeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSer
 	var v ConstMetric
 	if t.fillMissingLabels || (metricKind == "DELTA" && t.aggregateDeltas) {
 		v = ConstMetric{
-			FqName:      fqName,
-			LabelKeys:   labelKeys,
-			ValueType:   metricValueType,
-			Value:       metricValue,
-			LabelValues: labelValues,
-			ReportTime:  reportTime,
+			FqName:         fqName,
+			LabelKeys:      labelKeys,
+			ValueType:      metricValueType,
+			Value:          metricValue,
+			LabelValues:    labelValues,
+			ReportTime:     reportTime,
+			CollectionTime: time.Now(),
 
 			KeysHash: hashLabelKeys(labelKeys),
 		}
 	}
 
 	if metricKind == "DELTA" && t.aggregateDeltas {
-		t.deltaCounterStore.Increment(t.metricDescriptor, &v)
+		t.counterStore.Increment(t.metricDescriptor, &v)
 		return
 	}
 
@@ -191,12 +196,12 @@ func (t *timeSeriesMetrics) newConstMetric(fqName string, reportTime time.Time, 
 }
 
 func hashLabelKeys(labelKeys []string) uint64 {
-	dh := hashNew()
+	dh := HashNew()
 	sortedKeys := make([]string, len(labelKeys))
 	copy(sortedKeys, labelKeys)
 	sort.Strings(sortedKeys)
 	for _, key := range sortedKeys {
-		dh = hashAdd(dh, key)
+		dh = HashAdd(dh, key)
 		dh = hashAddByte(dh, separatorByte)
 	}
 	return dh
@@ -249,32 +254,32 @@ func (t *timeSeriesMetrics) completeHistogramMetrics(histograms map[string][]*Hi
 }
 
 func (t *timeSeriesMetrics) completeDeltaConstMetrics(reportingStartTime time.Time) {
-	descriptorMetrics := t.deltaCounterStore.ListMetrics(t.metricDescriptor.Name)
+	descriptorMetrics := t.counterStore.ListMetrics(t.metricDescriptor.Name)
 	now := time.Now().Truncate(time.Minute)
 
 	constMetrics := map[string][]*ConstMetric{}
 	for _, collected := range descriptorMetrics {
 		// If the metric wasn't collected we should still export it at the next sample time to avoid staleness
-		if reportingStartTime.After(collected.lastCollectedAt) {
+		if reportingStartTime.After(collected.CollectionTime) {
 			// Ideally we could use monitoring.MetricDescriptorMetadata.SamplePeriod to determine how many
 			// samples were missed to adjust this but monitoring.MetricDescriptorMetadata is viewed as optional
 			// for a monitoring.MetricDescriptor
-			reportingLag := collected.lastCollectedAt.Sub(collected.metric.ReportTime).Truncate(time.Minute)
-			collected.metric.ReportTime = now.Add(-reportingLag)
+			reportingLag := collected.CollectionTime.Sub(collected.ReportTime).Truncate(time.Minute)
+			collected.ReportTime = now.Add(-reportingLag)
 		}
 		if t.fillMissingLabels {
-			if _, exists := constMetrics[collected.metric.FqName]; !exists {
-				constMetrics[collected.metric.FqName] = []*ConstMetric{}
+			if _, exists := constMetrics[collected.FqName]; !exists {
+				constMetrics[collected.FqName] = []*ConstMetric{}
 			}
-			constMetrics[collected.metric.FqName] = append(constMetrics[collected.metric.FqName], collected.metric)
+			constMetrics[collected.FqName] = append(constMetrics[collected.FqName], collected)
 		} else {
 			t.ch <- t.newConstMetric(
-				collected.metric.FqName,
-				collected.metric.ReportTime,
-				collected.metric.LabelKeys,
-				collected.metric.ValueType,
-				collected.metric.Value,
-				collected.metric.LabelValues,
+				collected.FqName,
+				collected.ReportTime,
+				collected.LabelKeys,
+				collected.ValueType,
+				collected.Value,
+				collected.LabelValues,
 			)
 		}
 	}
@@ -285,34 +290,33 @@ func (t *timeSeriesMetrics) completeDeltaConstMetrics(reportingStartTime time.Ti
 }
 
 func (t *timeSeriesMetrics) completeDeltaHistogramMetrics(reportingStartTime time.Time) {
-	descriptorMetrics := t.deltaDistributionStore.ListMetrics(t.metricDescriptor.Name)
+	descriptorMetrics := t.histogramStore.ListMetrics(t.metricDescriptor.Name)
 	now := time.Now().Truncate(time.Minute)
 
 	histograms := map[string][]*HistogramMetric{}
 	for _, collected := range descriptorMetrics {
-
 		// If the histogram wasn't collected we should still export it at the next sample time to avoid staleness
-		if reportingStartTime.After(collected.lastCollectedAt) {
+		if reportingStartTime.After(collected.CollectionTime) {
 			// Ideally we could use monitoring.MetricDescriptorMetadata.SamplePeriod to determine how many
 			// samples were missed to adjust this but monitoring.MetricDescriptorMetadata is viewed as optional
 			// for a monitoring.MetricDescriptor
-			reportingLag := collected.lastCollectedAt.Sub(collected.histogram.ReportTime).Truncate(time.Minute)
-			collected.histogram.ReportTime = now.Add(-reportingLag)
+			reportingLag := collected.CollectionTime.Sub(collected.ReportTime).Truncate(time.Minute)
+			collected.ReportTime = now.Add(-reportingLag)
 		}
 		if t.fillMissingLabels {
-			if _, exists := histograms[collected.histogram.FqName]; !exists {
-				histograms[collected.histogram.FqName] = []*HistogramMetric{}
+			if _, exists := histograms[collected.FqName]; !exists {
+				histograms[collected.FqName] = []*HistogramMetric{}
 			}
-			histograms[collected.histogram.FqName] = append(histograms[collected.histogram.FqName], collected.histogram)
+			histograms[collected.FqName] = append(histograms[collected.FqName], collected)
 		} else {
 			t.ch <- t.newConstHistogram(
-				collected.histogram.FqName,
-				collected.histogram.ReportTime,
-				collected.histogram.LabelKeys,
-				collected.histogram.Mean,
-				collected.histogram.Count,
-				collected.histogram.Buckets,
-				collected.histogram.LabelValues,
+				collected.FqName,
+				collected.ReportTime,
+				collected.LabelKeys,
+				collected.Mean,
+				collected.Count,
+				collected.Buckets,
+				collected.LabelValues,
 			)
 		}
 	}
