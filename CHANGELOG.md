@@ -1,9 +1,15 @@
 ## master / unreleased
 
-## 0.13.0 / 2022-11-15
+## 0.13.0 / 2023-01-25
 
-* [FEATURE] Add `web.stackdriver-telemetry-path` flag. When configured the stackdriver metrics go to this endpoint and 
-`web.telemetry-path` contain just the runtime metrics.
+* [FEATURE] Add `monitoring.aggregate-deltas` and `monitoring.aggregate-deltas-ttl` flags which allow aggregating DELTA
+  metrics as counters instead of a gauge #168
+* [FEATURE] Add `web.stackdriver-telemetry-path` flag. When configured the stackdriver metrics go to this endpoint and
+  `web.telemetry-path` contain just the runtime metrics. #173
+* [ENHANCEMENT] Make Stackdriver main collector more library-friendly #157
+* [BUGFIX] Fixes suspected duplicate label panic for some GCP metric #153
+* [BUGFIX] Metrics-ingest-delay bugfix #151
+* [BUGFIX] Fix data race on metricDescriptorsFunction start and end times #158
 
 ## 0.12.0 / 2022-02-08
 
