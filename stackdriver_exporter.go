@@ -110,7 +110,9 @@ var (
 	).Default("false").Bool()
 
 	monitoringMetricsExtraFilter = kingpin.Flag(
-		"monitoring.filters", "Filters. i.e: pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")").Strings()
+		"monitoring.filters",
+		"Filters. i.e: pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")",
+	).Strings()
 
 	monitoringMetricsAggregateDeltas = kingpin.Flag(
 		"monitoring.aggregate-deltas", "If enabled will treat all DELTA metrics as an in-memory counter instead of a gauge",
@@ -356,11 +358,11 @@ func main() {
 func parseMetricExtraFilters() []collectors.MetricFilter {
 	var extraFilters []collectors.MetricFilter
 	for _, ef := range *monitoringMetricsExtraFilter {
-		efPrefix, efModifier := utils.GetExtraFilterModifiers(ef, ":")
-		if efPrefix != "" {
+		targetedMetricPrefix, filterQuery := utils.SplitExtraFilter(ef, ":")
+		if targetedMetricPrefix != "" {
 			extraFilter := collectors.MetricFilter{
-				Prefix:   efPrefix,
-				Modifier: efModifier,
+				TargetedMetricPrefix: targetedMetricPrefix,
+				FilterQuery:          filterQuery,
 			}
 			extraFilters = append(extraFilters, extraFilter)
 		}

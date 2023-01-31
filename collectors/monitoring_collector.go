@@ -33,8 +33,8 @@ import (
 const namespace = "stackdriver"
 
 type MetricFilter struct {
-	Prefix   string
-	Modifier string
+	TargetedMetricPrefix string
+	FilterQuery          string
 }
 
 type MonitoringCollector struct {
@@ -306,8 +306,8 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				}
 
 				for _, ef := range c.metricsFilters {
-					if strings.Contains(metricDescriptor.Type, ef.Prefix) {
-						filter = fmt.Sprintf("%s AND (%s)", filter, ef.Modifier)
+					if strings.Contains(metricDescriptor.Type, ef.TargetedMetricPrefix) {
+						filter = fmt.Sprintf("%s AND (%s)", filter, ef.FilterQuery)
 					}
 				}
 
