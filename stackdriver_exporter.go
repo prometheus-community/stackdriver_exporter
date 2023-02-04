@@ -368,7 +368,7 @@ func parseMetricExtraFilters() []collectors.MetricFilter {
 		targetedMetricPrefix, filterQuery := utils.SplitExtraFilter(ef, ":")
 		if targetedMetricPrefix != "" {
 			extraFilter := collectors.MetricFilter{
-				TargetedMetricPrefix: targetedMetricPrefix,
+				TargetedMetricPrefix: strings.ToLower(targetedMetricPrefix),
 				FilterQuery:          filterQuery,
 			}
 			extraFilters = append(extraFilters, extraFilter)
