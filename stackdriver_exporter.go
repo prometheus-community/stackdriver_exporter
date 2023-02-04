@@ -279,7 +279,14 @@ func main() {
 		}
 	}
 
-	level.Info(logger).Log("msg", "Starting stackdriver_exporter", "version", version.Info())
+	level.Info(logger).Log(
+		"msg", "Starting stackdriver_exporter",
+		"version", version.Info(),
+		"build_context", version.BuildContext(),
+		"projects", *projectID,
+		"metric_prefixes", *monitoringMetricsTypePrefixes,
+		"extra_filters", strings.Join(*monitoringMetricsExtraFilter, ","),
+	)
 	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
 
 	monitoringService, err := createMonitoringService(ctx)
