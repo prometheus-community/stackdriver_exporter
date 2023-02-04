@@ -22,7 +22,7 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
-	"google.golang.org/api/monitoring/v3"
+	"google.golang.org/genproto/googleapis/api/metric"
 )
 
 type CollectedHistogram struct {
@@ -36,7 +36,7 @@ type DeltaDistributionStore interface {
 
 	// Increment will use the incoming metricDescriptor and currentValue to either create a new entry or add the incoming
 	// value to an existing entry in the underlying store
-	Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *HistogramMetric)
+	Increment(metricDescriptor *metric.MetricDescriptor, currentValue *HistogramMetric)
 
 	// ListMetrics will return all known entries in the store for a metricDescriptorName
 	ListMetrics(metricDescriptorName string) map[string][]*CollectedHistogram
@@ -62,7 +62,7 @@ func NewInMemoryDeltaDistributionStore(logger log.Logger, ttl time.Duration) Del
 	}
 }
 
-func (s *inMemoryDeltaDistributionStore) Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *HistogramMetric) {
+func (s *inMemoryDeltaDistributionStore) Increment(metricDescriptor *metric.MetricDescriptor, currentValue *HistogramMetric) {
 	if currentValue == nil {
 		return
 	}

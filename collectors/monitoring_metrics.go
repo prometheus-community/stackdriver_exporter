@@ -16,15 +16,17 @@ package collectors
 import (
 	"time"
 
+	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 	"github.com/prometheus/client_golang/prometheus"
-	"google.golang.org/api/monitoring/v3"
+	"google.golang.org/genproto/googleapis/api/distribution"
+	"google.golang.org/genproto/googleapis/api/metric"
 
 	"sort"
 
 	"github.com/prometheus-community/stackdriver_exporter/utils"
 )
 
-func buildFQName(timeSeries *monitoring.TimeSeries) string {
+func buildFQName(timeSeries *monitoringpb.TimeSeries) string {
 	// The metric name to report is composed by the 3 parts:
 	// 1. namespace is a constant prefix (stackdriver)
 	// 2. subsystem is the monitored resource type (ie gce_instance)
@@ -33,7 +35,7 @@ func buildFQName(timeSeries *monitoring.TimeSeries) string {
 }
 
 type timeSeriesMetrics struct {
-	metricDescriptor *monitoring.MetricDescriptor
+	metricDescriptor *metric.MetricDescriptor
 
 	ch chan<- prometheus.Metric
 
@@ -46,7 +48,7 @@ type timeSeriesMetrics struct {
 	aggregateDeltas        bool
 }
 
-func NewTimeSeriesMetrics(descriptor *monitoring.MetricDescriptor,
+func NewTimeSeriesMetrics(descriptor *metric.MetricDescriptor,
 	ch chan<- prometheus.Metric,
 	fillMissingLabels bool,
 	deltaCounterStore DeltaCounterStore,
@@ -88,7 +90,7 @@ type ConstMetric struct {
 type HistogramMetric struct {
 	fqName      string
 	labelKeys   []string
-	dist        *monitoring.Distribution
+	dist        *distribution.Distribution
 	buckets     map[float64]uint64
 	labelValues []string
 	reportTime  time.Time
@@ -96,11 +98,11 @@ type HistogramMetric struct {
 	keysHash uint64
 }
 
-func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string, metricKind string) {
+func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoringpb.TimeSeries, reportTime time.Time, labelKeys []string, dist *distribution.Distribution, buckets map[float64]uint64, labelValues []string, metricKind metric.MetricDescriptor_MetricKind) {
 	fqName := buildFQName(timeSeries)
 
 	var v HistogramMetric
-	if t.fillMissingLabels || (metricKind == "DELTA" && t.aggregateDeltas) {
+	if t.fillMissingLabels || (metricKind == metric.MetricDescriptor_DELTA && t.aggregateDeltas) {
 		v = HistogramMetric{
 			fqName:      fqName,
 			labelKeys:   labelKeys,
@@ -113,7 +115,7 @@ func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 		}
 	}
 
-	if metricKind == "DELTA" && t.aggregateDeltas {
+	if metricKind == metric.MetricDescriptor_DELTA && t.aggregateDeltas {
 		t.deltaDistributionStore.Increment(t.metricDescriptor, &v)
 		return
 	}
@@ -130,7 +132,7 @@ func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 	t.ch <- t.newConstHistogram(fqName, reportTime, labelKeys, dist, buckets, labelValues)
 }
 
-func (t *timeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
+func (t *timeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Time, labelKeys []string, dist *distribution.Distribution, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
 	return prometheus.NewMetricWithTimestamp(
 		reportTime,
 		prometheus.MustNewConstHistogram(
@@ -143,11 +145,11 @@ func (t *timeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Tim
 	)
 }
 
-func (t *timeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string, metricKind string) {
+func (t *timeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoringpb.TimeSeries, reportTime time.Time, labelKeys []string, metricValueType prometheus.ValueType, metricValue float64, labelValues []string, metricKind metric.MetricDescriptor_MetricKind) {
 	fqName := buildFQName(timeSeries)
 
 	var v ConstMetric
-	if t.fillMissingLabels || (metricKind == "DELTA" && t.aggregateDeltas) {
+	if t.fillMissingLabels || (metricKind == metric.MetricDescriptor_DELTA && t.aggregateDeltas) {
 		v = ConstMetric{
 			fqName:      fqName,
 			labelKeys:   labelKeys,
@@ -160,7 +162,7 @@ func (t *timeSeriesMetrics) CollectNewConstMetric(timeSeries *monitoring.TimeSer
 		}
 	}
 
-	if metricKind == "DELTA" && t.aggregateDeltas {
+	if metricKind == metric.MetricDescriptor_DELTA && t.aggregateDeltas {
 		t.deltaCounterStore.Increment(t.metricDescriptor, &v)
 		return
 	}

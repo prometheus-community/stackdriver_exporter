@@ -19,7 +19,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/PuerkitoBio/rehttp"
+	"cloud.google.com/go/monitoring/apiv3"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
@@ -30,7 +30,6 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
-	"google.golang.org/api/monitoring/v3"
 	"google.golang.org/api/option"
 	"gopkg.in/alecthomas/kingpin.v2"
 
@@ -57,25 +56,9 @@ var (
 		"google.project-id", "Comma seperated list of Google Project IDs.",
 	).String()
 
-	stackdriverMaxRetries = kingpin.Flag(
-		"stackdriver.max-retries", "Max number of retries that should be attempted on 503 errors from stackdriver.",
-	).Default("0").Int()
-
-	stackdriverHttpTimeout = kingpin.Flag(
-		"stackdriver.http-timeout", "How long should stackdriver_exporter wait for a result from the Stackdriver API.",
+	gcpMetricClientTimeout = kingpin.Flag(
+		"stackdriver.client-timeout", "How long should the collector wait for a response from the GCP Monitoring APIs",
 	).Default("10s").Duration()
-
-	stackdriverMaxBackoffDuration = kingpin.Flag(
-		"stackdriver.max-backoff", "Max time between each request in an exp backoff scenario.",
-	).Default("5s").Duration()
-
-	stackdriverBackoffJitterBase = kingpin.Flag(
-		"stackdriver.backoff-jitter", "The amount of jitter to introduce in a exp backoff scenario.",
-	).Default("1s").Duration()
-
-	stackdriverRetryStatuses = kingpin.Flag(
-		"stackdriver.retry-statuses", "The HTTP statuses that should trigger a retry.",
-	).Default("503").Ints()
 
 	// Monitoring collector flags
 
@@ -130,29 +113,6 @@ func getDefaultGCPProject(ctx context.Context) (*string, error) {
 	return &credentials.ProjectID, nil
 }
 
-func createMonitoringService(ctx context.Context) (*monitoring.Service, error) {
-	googleClient, err := google.DefaultClient(ctx, monitoring.MonitoringReadScope)
-	if err != nil {
-		return nil, fmt.Errorf("Error creating Google client: %v", err)
-	}
-
-	googleClient.Timeout = *stackdriverHttpTimeout
-	googleClient.Transport = rehttp.NewTransport(
-		googleClient.Transport, // need to wrap DefaultClient transport
-		rehttp.RetryAll(
-			rehttp.RetryMaxRetries(*stackdriverMaxRetries),
-			rehttp.RetryStatuses(*stackdriverRetryStatuses...)), // Cloud support suggests retrying on 503 errors
-		rehttp.ExpJitterDelay(*stackdriverBackoffJitterBase, *stackdriverMaxBackoffDuration), // Set timeout to <10s as that is prom default timeout
-	)
-
-	monitoringService, err := monitoring.NewService(ctx, option.WithHTTPClient(googleClient))
-	if err != nil {
-		return nil, fmt.Errorf("Error creating Google Stackdriver Monitoring service: %v", err)
-	}
-
-	return monitoringService, nil
-}
-
 type handler struct {
 	handler http.Handler
 	logger  log.Logger
@@ -161,7 +121,7 @@ type handler struct {
 	metricsPrefixes     []string
 	metricsExtraFilters []collectors.MetricFilter
 	additionalGatherer  prometheus.Gatherer
-	m                   *monitoring.Service
+	metricClient        *monitoring.MetricClient
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -179,14 +139,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters []collectors.MetricFilter, m *monitoring.Service, logger log.Logger, additionalGatherer prometheus.Gatherer) *handler {
+func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters []collectors.MetricFilter, metricClient *monitoring.MetricClient, logger log.Logger, additionalGatherer prometheus.Gatherer) *handler {
 	h := &handler{
 		logger:              logger,
 		projectIDs:          projectIDs,
 		metricsPrefixes:     metricPrefixes,
 		metricsExtraFilters: metricExtraFilters,
 		additionalGatherer:  additionalGatherer,
-		m:                   m,
+		metricClient:        metricClient,
 	}
 
 	h.handler = h.innerHandler(nil)
@@ -197,16 +157,24 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 	registry := prometheus.NewRegistry()
 
 	for _, project := range h.projectIDs {
-		monitoringCollector, err := collectors.NewMonitoringCollector(project, h.m, collectors.MonitoringCollectorOptions{
-			MetricTypePrefixes:    h.filterMetricTypePrefixes(filters),
-			ExtraFilters:          h.metricsExtraFilters,
-			RequestInterval:       *monitoringMetricsInterval,
-			RequestOffset:         *monitoringMetricsOffset,
-			IngestDelay:           *monitoringMetricsIngestDelay,
-			FillMissingLabels:     *collectorFillMissingLabels,
-			DropDelegatedProjects: *monitoringDropDelegatedProjects,
-			AggregateDeltas:       *monitoringMetricsAggregateDeltas,
-		}, h.logger, collectors.NewInMemoryDeltaCounterStore(h.logger, *monitoringMetricsDeltasTTL), collectors.NewInMemoryDeltaDistributionStore(h.logger, *monitoringMetricsDeltasTTL))
+		monitoringCollector, err := collectors.NewMonitoringCollector(
+			project,
+			h.metricClient,
+			collectors.MonitoringCollectorOptions{
+				MetricTypePrefixes:    h.filterMetricTypePrefixes(filters),
+				ExtraFilters:          h.metricsExtraFilters,
+				RequestInterval:       *monitoringMetricsInterval,
+				RequestOffset:         *monitoringMetricsOffset,
+				IngestDelay:           *monitoringMetricsIngestDelay,
+				FillMissingLabels:     *collectorFillMissingLabels,
+				DropDelegatedProjects: *monitoringDropDelegatedProjects,
+				AggregateDeltas:       *monitoringMetricsAggregateDeltas,
+				ClientTimeout:         *gcpMetricClientTimeout,
+			},
+			h.logger,
+			collectors.NewInMemoryDeltaCounterStore(h.logger, *monitoringMetricsDeltasTTL),
+			collectors.NewInMemoryDeltaDistributionStore(h.logger, *monitoringMetricsDeltasTTL),
+		)
 		if err != nil {
 			level.Error(h.logger).Log("err", err)
 			os.Exit(1)
@@ -265,7 +233,14 @@ func main() {
 	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
 	level.Info(logger).Log("msg", "Using Google Cloud Project ID", "projectID", *projectID)
 
-	monitoringService, err := createMonitoringService(ctx)
+	//TODO do we need a connection pool or is a single connection okay?
+	//pool := option.WithGRPCConnectionPool(10)
+
+	// Notes from: https://pkg.go.dev/cloud.google.com/go#hdr-Timeouts_and_Cancellation
+	// The ctx used by the client should never have a timeout as it can interfere with credential refreshing
+	// Transient errors will be retried when correctness allows. Cancellation/timeout should be handled via the context
+	// provided to a function which makes an API call
+	metricClient, err := monitoring.NewMetricClient(ctx, option.WithScopes("https://www.googleapis.com/auth/monitoring.read"))
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create monitoring service", "err", err)
 		os.Exit(1)
@@ -277,12 +252,12 @@ func main() {
 
 	if *metricsPath == *stackdriverMetricsPath {
 		handler := newHandler(
-			projectIDs, metricsTypePrefixes, metricExtraFilters, monitoringService, logger, prometheus.DefaultGatherer)
+			projectIDs, metricsTypePrefixes, metricExtraFilters, metricClient, logger, prometheus.DefaultGatherer)
 		http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 	} else {
 		level.Info(logger).Log("msg", "Serving Stackdriver metrics at separate path", "path", *stackdriverMetricsPath)
 		handler := newHandler(
-			projectIDs, metricsTypePrefixes, metricExtraFilters, monitoringService, logger, nil)
+			projectIDs, metricsTypePrefixes, metricExtraFilters, metricClient, logger, nil)
 		http.Handle(*stackdriverMetricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 		http.Handle(*metricsPath, promhttp.Handler())
 	}
