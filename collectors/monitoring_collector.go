@@ -21,11 +21,16 @@ import (
 	"sync"
 	"time"
 
+	monitoringv3 "cloud.google.com/go/monitoring/apiv3"
+	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
-	"google.golang.org/api/monitoring/v3"
+	"google.golang.org/api/iterator"
+	"google.golang.org/genproto/googleapis/api/distribution"
+	"google.golang.org/genproto/googleapis/api/metric"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/prometheus-community/stackdriver_exporter/utils"
 )
@@ -44,7 +49,7 @@ type MonitoringCollector struct {
 	metricsInterval                 time.Duration
 	metricsOffset                   time.Duration
 	metricsIngestDelay              bool
-	monitoringService               *monitoring.Service
+	metricClient                    *monitoringv3.MetricClient
 	apiCallsTotalMetric             prometheus.Counter
 	scrapesTotalMetric              prometheus.Counter
 	scrapeErrorsTotalMetric         prometheus.Counter
@@ -57,6 +62,7 @@ type MonitoringCollector struct {
 	deltaCounterStore               DeltaCounterStore
 	deltaDistributionStore          DeltaDistributionStore
 	aggregateDeltas                 bool
+	timeout                         time.Duration
 }
 
 type MonitoringCollectorOptions struct {
@@ -80,9 +86,11 @@ type MonitoringCollectorOptions struct {
 	DropDelegatedProjects bool
 	// AggregateDeltas decides if DELTA metrics should be treated as a counter using the provided counterStore/distributionStore or a gauge
 	AggregateDeltas bool
+	// ClientTimeout controls how long each GCP request has to complete
+	ClientTimeout time.Duration
 }
 
-func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, counterStore DeltaCounterStore, distributionStore DeltaDistributionStore) (*MonitoringCollector, error) {
+func NewMonitoringCollector(projectID string, metricClient *monitoringv3.MetricClient, opts MonitoringCollectorOptions, logger log.Logger, counterStore DeltaCounterStore, distributionStore DeltaDistributionStore) (*MonitoringCollector, error) {
 	const subsystem = "monitoring"
 
 	apiCallsTotalMetric := prometheus.NewCounter(
@@ -152,7 +160,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		metricsInterval:                 opts.RequestInterval,
 		metricsOffset:                   opts.RequestOffset,
 		metricsIngestDelay:              opts.IngestDelay,
-		monitoringService:               monitoringService,
+		metricClient:                    metricClient,
 		apiCallsTotalMetric:             apiCallsTotalMetric,
 		scrapesTotalMetric:              scrapesTotalMetric,
 		scrapeErrorsTotalMetric:         scrapeErrorsTotalMetric,
@@ -165,6 +173,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		deltaCounterStore:               counterStore,
 		deltaDistributionStore:          distributionStore,
 		aggregateDeltas:                 opts.AggregateDeltas,
+		timeout:                         opts.ClientTimeout,
 	}
 
 	return monitoringCollector, nil
@@ -206,101 +215,6 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metric, begun time.Time) error {
-	metricDescriptorsFunction := func(page *monitoring.ListMetricDescriptorsResponse) error {
-		var wg = &sync.WaitGroup{}
-
-		c.apiCallsTotalMetric.Inc()
-
-		// It has been noticed that the same metric descriptor can be obtained from different GCP
-		// projects. When that happens, metrics are fetched twice and it provokes the error:
-		//     "collected metric xxx was collected before with the same name and label values"
-		//
-		// Metric descriptor project is irrelevant when it comes to fetch metrics, as they will be
-		// fetched from all the delegated projects filtering by metric type. Considering that, we
-		// can filter descriptors to keep just one per type.
-		//
-		// The following makes sure metric descriptors are unique to avoid fetching more than once
-		uniqueDescriptors := make(map[string]*monitoring.MetricDescriptor)
-		for _, descriptor := range page.MetricDescriptors {
-			uniqueDescriptors[descriptor.Type] = descriptor
-		}
-
-		errChannel := make(chan error, len(uniqueDescriptors))
-
-		endTime := time.Now().UTC().Add(c.metricsOffset * -1)
-		startTime := endTime.Add(c.metricsInterval * -1)
-
-		for _, metricDescriptor := range uniqueDescriptors {
-			wg.Add(1)
-			go func(metricDescriptor *monitoring.MetricDescriptor, ch chan<- prometheus.Metric, startTime, endTime time.Time) {
-				defer wg.Done()
-				level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics for descriptor", "descriptor", metricDescriptor.Type)
-				filter := fmt.Sprintf("metric.type=\"%s\"", metricDescriptor.Type)
-				if c.monitoringDropDelegatedProjects {
-					filter = fmt.Sprintf(
-						"project=\"%s\" AND metric.type=\"%s\"",
-						c.projectID,
-						metricDescriptor.Type)
-				}
-
-				if c.metricsIngestDelay &&
-					metricDescriptor.Metadata != nil &&
-					metricDescriptor.Metadata.IngestDelay != "" {
-					ingestDelay := metricDescriptor.Metadata.IngestDelay
-					ingestDelayDuration, err := time.ParseDuration(ingestDelay)
-					if err != nil {
-						level.Error(c.logger).Log("msg", "error parsing ingest delay from metric metadata", "descriptor", metricDescriptor.Type, "err", err, "delay", ingestDelay)
-						errChannel <- err
-						return
-					}
-					level.Debug(c.logger).Log("msg", "adding ingest delay", "descriptor", metricDescriptor.Type, "delay", ingestDelay)
-					endTime = endTime.Add(ingestDelayDuration * -1)
-					startTime = startTime.Add(ingestDelayDuration * -1)
-				}
-
-				for _, ef := range c.metricsFilters {
-					if strings.Contains(metricDescriptor.Type, ef.Prefix) {
-						filter = fmt.Sprintf("%s AND (%s)", filter, ef.Modifier)
-					}
-				}
-
-				level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
-
-				timeSeriesListCall := c.monitoringService.Projects.TimeSeries.List(utils.ProjectResource(c.projectID)).
-					Filter(filter).
-					IntervalStartTime(startTime.Format(time.RFC3339Nano)).
-					IntervalEndTime(endTime.Format(time.RFC3339Nano))
-
-				for {
-					c.apiCallsTotalMetric.Inc()
-					page, err := timeSeriesListCall.Do()
-					if err != nil {
-						level.Error(c.logger).Log("msg", "error retrieving Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
-						errChannel <- err
-						break
-					}
-					if page == nil {
-						break
-					}
-					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch, begun); err != nil {
-						level.Error(c.logger).Log("msg", "error reporting Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
-						errChannel <- err
-						break
-					}
-					if page.NextPageToken == "" {
-						break
-					}
-					timeSeriesListCall.PageToken(page.NextPageToken)
-				}
-			}(metricDescriptor, ch, startTime, endTime)
-		}
-
-		wg.Wait()
-		close(errChannel)
-
-		return <-errChannel
-	}
-
 	var wg = &sync.WaitGroup{}
 
 	errChannel := make(chan error, len(c.metricsTypePrefixes))
@@ -310,7 +224,6 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 		go func(metricsTypePrefix string) {
 			defer wg.Done()
 			level.Debug(c.logger).Log("msg", "listing Google Stackdriver Monitoring metric descriptors starting with", "prefix", metricsTypePrefix)
-			ctx := context.Background()
 			filter := fmt.Sprintf("metric.type = starts_with(\"%s\")", metricsTypePrefix)
 			if c.monitoringDropDelegatedProjects {
 				filter = fmt.Sprintf(
@@ -318,10 +231,40 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					c.projectID,
 					metricsTypePrefix)
 			}
-			if err := c.monitoringService.Projects.MetricDescriptors.List(utils.ProjectResource(c.projectID)).
-				Filter(filter).
-				Pages(ctx, metricDescriptorsFunction); err != nil {
-				errChannel <- err
+
+			req := &monitoringpb.ListMetricDescriptorsRequest{
+				Name:   utils.ProjectResource(c.projectID),
+				Filter: filter,
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+			defer cancel()
+			it := c.metricClient.ListMetricDescriptors(ctx, req)
+
+			apiCalls := 1.0
+			var descriptors []*metric.MetricDescriptor
+			for {
+				// There's nothing exposed in https://pkg.go.dev/google.golang.org/api/iterator@v0.103.0 which lets you
+				// know an API call was initiated. You might think https://pkg.go.dev/google.golang.org/api/iterator@v0.103.0#NewPager
+				// could do it but the pageSize is a superficial page size that the consumer sets and has impact on API call paging.
+				// If we know there are no items left in the current page and there's a non-empty page token then calling Next() is going to initiate an API call
+				if it.PageInfo().Remaining() == 0 && it.PageInfo().Token != "" {
+					apiCalls += 1.0
+				}
+				descriptor, err := it.Next()
+				if err == iterator.Done {
+					break
+				}
+				if err != nil {
+					errChannel <- fmt.Errorf("error while fetching descriptors for %s, %v", metricsTypePrefix, err)
+					break
+				}
+				descriptors = append(descriptors, descriptor)
+			}
+			c.apiCallsTotalMetric.Add(apiCalls)
+
+			if err := c.collectMetricsForDescriptors(ch, begun, descriptors); err != nil {
+				errChannel <- fmt.Errorf("error while fetching descriptors for %s, %v", metricsTypePrefix, err)
 			}
 		}(metricsTypePrefix)
 	}
@@ -333,15 +276,121 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 	return <-errChannel
 }
 
+func (c *MonitoringCollector) collectMetricsForDescriptors(ch chan<- prometheus.Metric, begun time.Time, descriptors []*metric.MetricDescriptor) error {
+	var wg = &sync.WaitGroup{}
+	// It has been noticed that the same metric descriptor can be obtained from different GCP
+	// projects. When that happens, metrics are fetched twice and it provokes the error:
+	//     "collected metric xxx was collected before with the same name and label values"
+	//
+	// Metric descriptor project is irrelevant when it comes to fetch metrics, as they will be
+	// fetched from all the delegated projects filtering by metric type. Considering that, we
+	// can filter descriptors to keep just one per type.
+	//
+	// The following makes sure metric descriptors are unique to avoid fetching more than once
+	uniqueDescriptors := make(map[string]*metric.MetricDescriptor)
+	for _, descriptor := range descriptors {
+		uniqueDescriptors[descriptor.Type] = descriptor
+	}
+
+	errChannel := make(chan error, len(uniqueDescriptors))
+
+	endTime := time.Now().UTC().Add(c.metricsOffset * -1)
+	startTime := endTime.Add(c.metricsInterval * -1)
+
+	for _, metricDescriptor := range uniqueDescriptors {
+		wg.Add(1)
+		go func(metricDescriptor *metric.MetricDescriptor, ch chan<- prometheus.Metric, startTime, endTime time.Time) {
+			defer wg.Done()
+			level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics for descriptor", "descriptor", metricDescriptor.Type)
+			filter := fmt.Sprintf("metric.type=\"%s\"", metricDescriptor.Type)
+			if c.monitoringDropDelegatedProjects {
+				filter = fmt.Sprintf(
+					"project=\"%s\" AND metric.type=\"%s\"",
+					c.projectID,
+					metricDescriptor.Type)
+			}
+
+			if c.metricsIngestDelay &&
+				metricDescriptor.Metadata != nil &&
+				metricDescriptor.Metadata.IngestDelay != nil {
+				ingestDelay := metricDescriptor.Metadata.IngestDelay.AsDuration()
+				level.Debug(c.logger).Log("msg", "adding ingest delay", "descriptor", metricDescriptor.Type, "delay", ingestDelay)
+				endTime = endTime.Add(ingestDelay * -1)
+				startTime = startTime.Add(ingestDelay * -1)
+			}
+
+			for _, ef := range c.metricsFilters {
+				if strings.Contains(metricDescriptor.Type, ef.Prefix) {
+					filter = fmt.Sprintf("%s AND (%s)", filter, ef.Modifier)
+				}
+			}
+
+			level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
+
+			request := &monitoringpb.ListTimeSeriesRequest{
+				Name:   utils.ProjectResource(c.projectID),
+				Filter: filter,
+				Interval: &monitoringpb.TimeInterval{
+					EndTime: &timestamppb.Timestamp{
+						Seconds: endTime.Unix(),
+						Nanos:   0,
+					},
+					StartTime: &timestamppb.Timestamp{
+						Seconds: startTime.Unix(),
+						Nanos:   0,
+					},
+				},
+				View: monitoringpb.ListTimeSeriesRequest_FULL,
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+			defer cancel()
+			it := c.metricClient.ListTimeSeries(ctx, request)
+
+			var results []*monitoringpb.TimeSeries
+			apiCalls := 1.0
+			for {
+				// There's nothing exposed in https://pkg.go.dev/google.golang.org/api/iterator@v0.103.0 which lets you
+				// know an API call was initiated. You might think https://pkg.go.dev/google.golang.org/api/iterator@v0.103.0#NewPager
+				// could do it but the pageSize is a superficial page size that the consumer sets and has impact on API call paging.
+				// If we know there are no items left in the current page and there's a non-empty page token then calling Next() is going to initiate an API call
+				if it.PageInfo().Remaining() == 0 && it.PageInfo().Token != "" {
+					apiCalls += 1.0
+				}
+				timeSeries, err := it.Next()
+				if err == iterator.Done {
+					break
+				}
+				if err != nil {
+					level.Error(c.logger).Log("msg", "error retrieving Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
+					errChannel <- err
+					break
+				}
+				results = append(results, timeSeries)
+			}
+			c.apiCallsTotalMetric.Add(apiCalls)
+
+			if err := c.reportTimeSeriesMetrics(results, metricDescriptor, ch, begun); err != nil {
+				level.Error(c.logger).Log("msg", "error reporting Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
+				errChannel <- err
+			}
+		}(metricDescriptor, ch, startTime, endTime)
+	}
+
+	wg.Wait()
+	close(errChannel)
+
+	return <-errChannel
+}
+
 func (c *MonitoringCollector) reportTimeSeriesMetrics(
-	page *monitoring.ListTimeSeriesResponse,
-	metricDescriptor *monitoring.MetricDescriptor,
+	results []*monitoringpb.TimeSeries,
+	metricDescriptor *metric.MetricDescriptor,
 	ch chan<- prometheus.Metric,
 	begun time.Time,
 ) error {
 	var metricValue float64
 	var metricValueType prometheus.ValueType
-	var newestTSPoint *monitoring.Point
+	var newestTSPoint *monitoringpb.Point
 
 	timeSeriesMetrics, err := NewTimeSeriesMetrics(metricDescriptor,
 		ch,
@@ -353,13 +402,10 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	if err != nil {
 		return fmt.Errorf("error creating the TimeSeriesMetrics %v", err)
 	}
-	for _, timeSeries := range page.TimeSeries {
+	for _, timeSeries := range results {
 		newestEndTime := time.Unix(0, 0)
 		for _, point := range timeSeries.Points {
-			endTime, err := time.Parse(time.RFC3339Nano, point.Interval.EndTime)
-			if err != nil {
-				return fmt.Errorf("Error parsing TimeSeries Point interval end time `%s`: %s", point.Interval.EndTime, err)
-			}
+			endTime := time.Unix(point.Interval.EndTime.GetSeconds(), int64(point.Interval.EndTime.GetNanos()))
 			if endTime.After(newestEndTime) {
 				newestEndTime = endTime
 				newestTSPoint = point
@@ -402,32 +448,32 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 		}
 
 		switch timeSeries.MetricKind {
-		case "GAUGE":
+		case metric.MetricDescriptor_GAUGE:
 			metricValueType = prometheus.GaugeValue
-		case "DELTA":
+		case metric.MetricDescriptor_DELTA:
 			if c.aggregateDeltas {
 				metricValueType = prometheus.CounterValue
 			} else {
 				metricValueType = prometheus.GaugeValue
 			}
-		case "CUMULATIVE":
+		case metric.MetricDescriptor_CUMULATIVE:
 			metricValueType = prometheus.CounterValue
 		default:
 			continue
 		}
 
 		switch timeSeries.ValueType {
-		case "BOOL":
+		case metric.MetricDescriptor_BOOL:
 			metricValue = 0
-			if *newestTSPoint.Value.BoolValue {
+			if newestTSPoint.Value.GetBoolValue() {
 				metricValue = 1
 			}
-		case "INT64":
-			metricValue = float64(*newestTSPoint.Value.Int64Value)
-		case "DOUBLE":
-			metricValue = *newestTSPoint.Value.DoubleValue
-		case "DISTRIBUTION":
-			dist := newestTSPoint.Value.DistributionValue
+		case metric.MetricDescriptor_INT64:
+			metricValue = float64(newestTSPoint.Value.GetInt64Value())
+		case metric.MetricDescriptor_DOUBLE:
+			metricValue = newestTSPoint.Value.GetDoubleValue()
+		case metric.MetricDescriptor_DISTRIBUTION:
+			dist := newestTSPoint.Value.GetDistributionValue()
 			buckets, err := c.generateHistogramBuckets(dist)
 
 			if err == nil {
@@ -449,25 +495,23 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 }
 
 func (c *MonitoringCollector) generateHistogramBuckets(
-	dist *monitoring.Distribution,
+	dist *distribution.Distribution,
 ) (map[float64]uint64, error) {
-	opts := dist.BucketOptions
 	var bucketKeys []float64
-	switch {
-	case opts.ExplicitBuckets != nil:
-		// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TypedValue#explicit
+	switch opts := dist.BucketOptions.GetOptions().(type) {
+	case *distribution.Distribution_BucketOptions_ExplicitBuckets:
 		bucketKeys = make([]float64, len(opts.ExplicitBuckets.Bounds)+1)
 		copy(bucketKeys, opts.ExplicitBuckets.Bounds)
-	case opts.LinearBuckets != nil:
-		// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TypedValue#linear
+	case *distribution.Distribution_BucketOptions_LinearBuckets:
+		// @see https://pkg.go.dev/google.golang.org/genproto/googleapis/api/distribution#Distribution_BucketOptions_Linear
 		// NumFiniteBuckets is inclusive so bucket count is num+2
 		num := int(opts.LinearBuckets.NumFiniteBuckets)
 		bucketKeys = make([]float64, num+2)
 		for i := 0; i <= num; i++ {
 			bucketKeys[i] = opts.LinearBuckets.Offset + (float64(i) * opts.LinearBuckets.Width)
 		}
-	case opts.ExponentialBuckets != nil:
-		// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TypedValue#exponential
+	case *distribution.Distribution_BucketOptions_ExponentialBuckets:
+		// @see https://pkg.go.dev/google.golang.org/genproto/googleapis/api/distribution#Distribution_BucketOptions_Exponential
 		// NumFiniteBuckets is inclusive so bucket count is num+2
 		num := int(opts.ExponentialBuckets.NumFiniteBuckets)
 		bucketKeys = make([]float64, num+2)

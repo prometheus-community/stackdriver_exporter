@@ -22,7 +22,7 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
-	"google.golang.org/api/monitoring/v3"
+	"google.golang.org/genproto/googleapis/api/metric"
 )
 
 type CollectedMetric struct {
@@ -36,7 +36,7 @@ type DeltaCounterStore interface {
 
 	// Increment will use the incoming metricDescriptor and currentValue to either create a new entry or add the incoming
 	// value to an existing entry in the underlying store
-	Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *ConstMetric)
+	Increment(metricDescriptor *metric.MetricDescriptor, currentValue *ConstMetric)
 
 	// ListMetrics will return all known entries in the store for a metricDescriptorName
 	ListMetrics(metricDescriptorName string) map[string][]*CollectedMetric
@@ -62,7 +62,7 @@ func NewInMemoryDeltaCounterStore(logger log.Logger, ttl time.Duration) DeltaCou
 	}
 }
 
-func (s *inMemoryDeltaCounterStore) Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *ConstMetric) {
+func (s *inMemoryDeltaCounterStore) Increment(metricDescriptor *metric.MetricDescriptor, currentValue *ConstMetric) {
 	if currentValue == nil {
 		return
 	}
