@@ -57,6 +57,7 @@ type MonitoringCollector struct {
 	deltaCounterStore               DeltaCounterStore
 	deltaDistributionStore          DeltaDistributionStore
 	aggregateDeltas                 bool
+	descriptorCache                 DescriptorCache
 }
 
 type MonitoringCollectorOptions struct {
@@ -80,6 +81,33 @@ type MonitoringCollectorOptions struct {
 	DropDelegatedProjects bool
 	// AggregateDeltas decides if DELTA metrics should be treated as a counter using the provided counterStore/distributionStore or a gauge
 	AggregateDeltas bool
+	// DescriptorCacheTTL is the TTL on the items in the descriptorCache which caches the MetricDescriptors for a MetricTypePrefix
+	DescriptorCacheTTL time.Duration
+	// DescriptorCacheOnlyGoogle decides whether only google specific descriptors should be cached or all
+	DescriptorCacheOnlyGoogle bool
+}
+
+func isGoogleMetric(name string) bool {
+	parts := strings.Split(name, "/")
+	return strings.Contains(parts[0], "googleapis.com")
+}
+
+type googleDescriptorCache struct {
+	inner *descriptorCache
+}
+
+func (d *googleDescriptorCache) Lookup(prefix string) []*monitoring.MetricDescriptor {
+	if !isGoogleMetric(prefix) {
+		return nil
+	}
+	return d.inner.Lookup(prefix)
+}
+
+func (d *googleDescriptorCache) Store(prefix string, data []*monitoring.MetricDescriptor) {
+	if !isGoogleMetric(prefix) {
+		return
+	}
+	d.inner.Store(prefix, data)
 }
 
 func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, counterStore DeltaCounterStore, distributionStore DeltaDistributionStore) (*MonitoringCollector, error) {
@@ -145,6 +173,16 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		},
 	)
 
+	var descriptorCache DescriptorCache
+	if opts.DescriptorCacheTTL == 0 {
+		descriptorCache = &noopDescriptorCache{}
+	} else if opts.DescriptorCacheOnlyGoogle {
+		descriptorCache = &googleDescriptorCache{inner: newDescriptorCache(opts.DescriptorCacheTTL)}
+	} else {
+		descriptorCache = newDescriptorCache(opts.DescriptorCacheTTL)
+
+	}
+
 	monitoringCollector := &MonitoringCollector{
 		projectID:                       projectID,
 		metricsTypePrefixes:             opts.MetricTypePrefixes,
@@ -165,6 +203,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		deltaCounterStore:               counterStore,
 		deltaDistributionStore:          distributionStore,
 		aggregateDeltas:                 opts.AggregateDeltas,
+		descriptorCache:                 descriptorCache,
 	}
 
 	return monitoringCollector, nil
@@ -206,10 +245,8 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metric, begun time.Time) error {
-	metricDescriptorsFunction := func(page *monitoring.ListMetricDescriptorsResponse) error {
+	metricDescriptorsFunction := func(descriptors []*monitoring.MetricDescriptor) error {
 		var wg = &sync.WaitGroup{}
-
-		c.apiCallsTotalMetric.Inc()
 
 		// It has been noticed that the same metric descriptor can be obtained from different GCP
 		// projects. When that happens, metrics are fetched twice and it provokes the error:
@@ -221,7 +258,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 		//
 		// The following makes sure metric descriptors are unique to avoid fetching more than once
 		uniqueDescriptors := make(map[string]*monitoring.MetricDescriptor)
-		for _, descriptor := range page.MetricDescriptors {
+		for _, descriptor := range descriptors {
 			uniqueDescriptors[descriptor.Type] = descriptor
 		}
 
@@ -309,7 +346,6 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 		wg.Add(1)
 		go func(metricsTypePrefix string) {
 			defer wg.Done()
-			level.Debug(c.logger).Log("msg", "listing Google Stackdriver Monitoring metric descriptors starting with", "prefix", metricsTypePrefix)
 			ctx := context.Background()
 			filter := fmt.Sprintf("metric.type = starts_with(\"%s\")", metricsTypePrefix)
 			if c.monitoringDropDelegatedProjects {
@@ -318,10 +354,29 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					c.projectID,
 					metricsTypePrefix)
 			}
-			if err := c.monitoringService.Projects.MetricDescriptors.List(utils.ProjectResource(c.projectID)).
-				Filter(filter).
-				Pages(ctx, metricDescriptorsFunction); err != nil {
-				errChannel <- err
+
+			if cached := c.descriptorCache.Lookup(metricsTypePrefix); cached != nil {
+				level.Debug(c.logger).Log("msg", "using cached Google Stackdriver Monitoring metric descriptors starting with", "prefix", metricsTypePrefix)
+				if err := metricDescriptorsFunction(cached); err != nil {
+					errChannel <- err
+				}
+			} else {
+				var cache []*monitoring.MetricDescriptor
+
+				callback := func(r *monitoring.ListMetricDescriptorsResponse) error {
+					c.apiCallsTotalMetric.Inc()
+					cache = append(cache, r.MetricDescriptors...)
+					return metricDescriptorsFunction(r.MetricDescriptors)
+				}
+
+				level.Debug(c.logger).Log("msg", "listing Google Stackdriver Monitoring metric descriptors starting with", "prefix", metricsTypePrefix)
+				if err := c.monitoringService.Projects.MetricDescriptors.List(utils.ProjectResource(c.projectID)).
+					Filter(filter).
+					Pages(ctx, callback); err != nil {
+					errChannel <- err
+				}
+
+				c.descriptorCache.Store(metricsTypePrefix, cache)
 			}
 		}(metricsTypePrefix)
 	}
