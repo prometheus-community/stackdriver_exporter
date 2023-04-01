@@ -13,7 +13,7 @@ require (
 	github.com/prometheus/client_model v0.3.0
 	github.com/prometheus/common v0.42.0
 	golang.org/x/net v0.8.0
-	golang.org/x/oauth2 v0.5.0
+	golang.org/x/oauth2 v0.6.0
 	google.golang.org/api v0.108.0
 )
 
