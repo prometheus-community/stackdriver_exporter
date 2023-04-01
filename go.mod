@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/PuerkitoBio/rehttp v1.1.0
-	github.com/alecthomas/kingpin/v2 v2.3.1
+	github.com/alecthomas/kingpin/v2 v2.3.2
 	github.com/fatih/camelcase v1.0.0
 	github.com/go-kit/log v0.2.1
 	github.com/onsi/ginkgo v1.16.5
@@ -35,7 +35,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
-	github.com/xhit/go-str2duration v1.2.0 // indirect
+	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
