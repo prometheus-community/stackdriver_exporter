@@ -36,6 +36,15 @@ To run the stackdriver exporter as a Docker container, run:
 $ docker run -p 9255:9255 prometheuscommunity/stackdriver-exporter <flags>
 ```
 
+#### Kubernetes
+
+You can find a helm chart in the prometheus-community charts repository at <https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus-stackdriver-exporter>
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm install [RELEASE_NAME] prometheus-community/prometheus-stackdriver-exporter
+```
+
 ### Cloud Foundry
 
 The exporter can be deployed to an already existing [Cloud Foundry][cloudfoundry] environment:
