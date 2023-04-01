@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/rehttp"
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
@@ -32,7 +33,6 @@ import (
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/monitoring/v3"
 	"google.golang.org/api/option"
-	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
 	"github.com/prometheus-community/stackdriver_exporter/utils"
