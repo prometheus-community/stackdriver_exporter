@@ -113,6 +113,14 @@ var (
 	monitoringMetricsDeltasTTL = kingpin.Flag(
 		"monitoring.aggregate-deltas-ttl", "How long should a delta metric continue to be exported after GCP stops producing a metric",
 	).Default("30m").Duration()
+
+	monitoringDescriptorCacheTTL = kingpin.Flag(
+		"monitoring.descriptor-cache-ttl", "How long should the metric descriptors for a prefixed be cached for",
+	).Default("0s").Duration()
+
+	monitoringDescriptorCacheOnlyGoogle = kingpin.Flag(
+		"monitoring.descriptor-cache-only-google", "Only cache descriptors for *.googleapis.com metrics",
+	).Default("true").Bool()
 )
 
 func init() {
@@ -198,14 +206,16 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 
 	for _, project := range h.projectIDs {
 		monitoringCollector, err := collectors.NewMonitoringCollector(project, h.m, collectors.MonitoringCollectorOptions{
-			MetricTypePrefixes:    h.filterMetricTypePrefixes(filters),
-			ExtraFilters:          h.metricsExtraFilters,
-			RequestInterval:       *monitoringMetricsInterval,
-			RequestOffset:         *monitoringMetricsOffset,
-			IngestDelay:           *monitoringMetricsIngestDelay,
-			FillMissingLabels:     *collectorFillMissingLabels,
-			DropDelegatedProjects: *monitoringDropDelegatedProjects,
-			AggregateDeltas:       *monitoringMetricsAggregateDeltas,
+			MetricTypePrefixes:        h.filterMetricTypePrefixes(filters),
+			ExtraFilters:              h.metricsExtraFilters,
+			RequestInterval:           *monitoringMetricsInterval,
+			RequestOffset:             *monitoringMetricsOffset,
+			IngestDelay:               *monitoringMetricsIngestDelay,
+			FillMissingLabels:         *collectorFillMissingLabels,
+			DropDelegatedProjects:     *monitoringDropDelegatedProjects,
+			AggregateDeltas:           *monitoringMetricsAggregateDeltas,
+			DescriptorCacheTTL:        *monitoringDescriptorCacheTTL,
+			DescriptorCacheOnlyGoogle: *monitoringDescriptorCacheOnlyGoogle,
 		}, h.logger, collectors.NewInMemoryDeltaCounterStore(h.logger, *monitoringMetricsDeltasTTL), collectors.NewInMemoryDeltaDistributionStore(h.logger, *monitoringMetricsDeltasTTL))
 		if err != nil {
 			level.Error(h.logger).Log("err", err)
