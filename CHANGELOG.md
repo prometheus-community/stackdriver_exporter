@@ -1,5 +1,9 @@
 ## master / unreleased
 
+## 0.14.0 / 2023-05-26
+
+* [FEATURE] cache descriptors to reduce API calls #218
+
 ## 0.13.0 / 2023-01-25
 
 * [FEATURE] Add `monitoring.aggregate-deltas` and `monitoring.aggregate-deltas-ttl` flags which allow aggregating DELTA
