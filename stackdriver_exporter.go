@@ -28,6 +28,8 @@ import (
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
 	"github.com/prometheus/common/version"
+	"github.com/prometheus/exporter-toolkit/web"
+	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
@@ -41,16 +43,14 @@ import (
 var (
 	// General exporter flags
 
-	listenAddress = kingpin.Flag(
-		"web.listen-address", "Address to listen on for web interface and telemetry.",
-	).Default(":9255").String()
+	toolkitFlags = webflag.AddFlags(kingpin.CommandLine, ":9225")
 
 	metricsPath = kingpin.Flag(
 		"web.telemetry-path", "Path under which to expose Prometheus metrics.",
 	).Default("/metrics").String()
 
 	stackdriverMetricsPath = kingpin.Flag(
-		"web.stackdriver-telemetry-path", "Path under which to expose Go runtime metrics.",
+		"web.stackdriver-telemetry-path", "Path under which to expose Stackdriver metrics.",
 	).Default("/metrics").String()
 
 	projectID = kingpin.Flag(
@@ -297,19 +297,37 @@ func main() {
 		http.Handle(*metricsPath, promhttp.Handler())
 	}
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<html>
-             <head><title>Stackdriver Exporter</title></head>
-             <body>
-             <h1>Stackdriver Exporter</h1>
-             <p><a href='` + *metricsPath + `'>Metrics</a></p>
-             </body>
-             </html>`))
-	})
+	if *metricsPath != "/" && *metricsPath != "" {
+		landingConfig := web.LandingConfig{
+			Name:        "Stackdriver Exporter",
+			Description: "Prometheus Exporter for Google Stackdriver",
+			Version:     version.Info(),
+			Links: []web.LandingLinks{
+				{
+					Address: *metricsPath,
+					Text:    "Metrics",
+				},
+			},
+		}
+		if *metricsPath != *stackdriverMetricsPath {
+			landingConfig.Links = append(landingConfig.Links,
+				web.LandingLinks{
+					Address: *stackdriverMetricsPath,
+					Text:    "Stackdriver Metrics",
+				},
+			)
+		}
+		landingPage, err := web.NewLandingPage(landingConfig)
+		if err != nil {
+			level.Error(logger).Log("err", err)
+			os.Exit(1)
+		}
+		http.Handle("/", landingPage)
+	}
 
-	level.Info(logger).Log("msg", "Listening on", "address", *listenAddress)
-	if err := http.ListenAndServe(*listenAddress, nil); err != nil {
-		level.Error(logger).Log("err", err)
+	srv := &http.Server{}
+	if err := web.ListenAndServe(srv, toolkitFlags, logger); err != nil {
+		level.Error(logger).Log("msg", "Error starting server", "err", err)
 		os.Exit(1)
 	}
 }
