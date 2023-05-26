@@ -43,7 +43,7 @@ import (
 var (
 	// General exporter flags
 
-	toolkitFlags = webflag.AddFlags(kingpin.CommandLine, ":9225")
+	toolkitFlags = webflag.AddFlags(kingpin.CommandLine, ":9255")
 
 	metricsPath = kingpin.Flag(
 		"web.telemetry-path", "Path under which to expose Prometheus metrics.",
