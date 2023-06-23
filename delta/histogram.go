@@ -25,6 +25,7 @@ import (
 	"google.golang.org/api/monitoring/v3"
 
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
+	"github.com/prometheus-community/stackdriver_exporter/hash"
 )
 
 type HistogramEntry struct {
@@ -94,8 +95,8 @@ func toHistogramKey(hist *collectors.HistogramMetric) uint64 {
 		keyParts = append(keyParts, fmt.Sprintf("%s:%s", k, labels[k]))
 	}
 	hashText := fmt.Sprintf("%s|%s", hist.FqName, strings.Join(keyParts, "|"))
-	h := collectors.HashNew()
-	h = collectors.HashAdd(h, hashText)
+	h := hash.New()
+	h = hash.Add(h, hashText)
 
 	return h
 }

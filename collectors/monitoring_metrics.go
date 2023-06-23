@@ -21,6 +21,7 @@ import (
 
 	"sort"
 
+	"github.com/prometheus-community/stackdriver_exporter/hash"
 	"github.com/prometheus-community/stackdriver_exporter/utils"
 )
 
@@ -196,13 +197,13 @@ func (t *timeSeriesMetrics) newConstMetric(fqName string, reportTime time.Time, 
 }
 
 func hashLabelKeys(labelKeys []string) uint64 {
-	dh := HashNew()
+	dh := hash.New()
 	sortedKeys := make([]string, len(labelKeys))
 	copy(sortedKeys, labelKeys)
 	sort.Strings(sortedKeys)
 	for _, key := range sortedKeys {
-		dh = HashAdd(dh, key)
-		dh = hashAddByte(dh, separatorByte)
+		dh = hash.Add(dh, key)
+		dh = hash.AddByte(dh, hash.SeparatorByte)
 	}
 	return dh
 }
