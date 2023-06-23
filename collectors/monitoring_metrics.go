@@ -47,7 +47,7 @@ type timeSeriesMetrics struct {
 	aggregateDeltas bool
 }
 
-func NewTimeSeriesMetrics(descriptor *monitoring.MetricDescriptor,
+func newTimeSeriesMetrics(descriptor *monitoring.MetricDescriptor,
 	ch chan<- prometheus.Metric,
 	fillMissingLabels bool,
 	counterStore DeltaCounterStore,

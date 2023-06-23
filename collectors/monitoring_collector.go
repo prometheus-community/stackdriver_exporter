@@ -408,7 +408,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	var metricValueType prometheus.ValueType
 	var newestTSPoint *monitoring.Point
 
-	timeSeriesMetrics, err := NewTimeSeriesMetrics(metricDescriptor,
+	timeSeriesMetrics, err := newTimeSeriesMetrics(metricDescriptor,
 		ch,
 		c.collectorFillMissingLabels,
 		c.counterStore,
