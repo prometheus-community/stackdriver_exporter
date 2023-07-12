@@ -548,7 +548,7 @@ func (c *MonitoringCollector) generateHistogramBuckets(
 			buckets[b] = uint64(dist.BucketCounts[i]) + last
 			last = buckets[b]
 		} else {
-			buckets[b] = last
+			buckets[b] = 0
 		}
 	}
 	return buckets, nil
