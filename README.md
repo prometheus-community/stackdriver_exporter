@@ -96,7 +96,7 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 | `web.config.file`                   | No       |                           | [EXPERIMENTAL] Path to configuration file that can enable TLS or authentication.                                                                                                                  |
 | `web.listen-address`                | No       | `:9255`                   | Address to listen on for web interface and telemetry Repeatable for multiple addresses.                                                                                                           |
 | `web.systemd-socket`                | No       |                           | Use systemd socket activation listeners instead of port listeners (Linux only).                                                                                                                   |
-| `web.stackdriver-telemetry-path`    | No       | "/metrics"                | Path under which to expose Stackdriver metrics.                                                                                                                                                   |
+| `web.stackdriver-telemetry-path`    | No       | `/metrics`                | Path under which to expose Stackdriver metrics.                                                                                                                                                   |
 | `web.telemetry-path`                | No       | `/metrics`                | Path under which to expose Prometheus metrics                                                                                                                                                     |
 
 ### TLS and basic authentication
