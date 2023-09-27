@@ -127,6 +127,13 @@ var (
 	monitoringDescriptorCacheOnlyGoogle = kingpin.Flag(
 		"monitoring.descriptor-cache-only-google", "Only cache descriptors for *.googleapis.com metrics",
 	).Default("true").Bool()
+
+	/* Chronosphere flags */
+	chronosphereShardName = kingpin.Flag(
+		"chronosphere.shard", "Name of a stackdriver-exporter shard",
+	).Required().String()
+
+	internalMonitoring *collectors.InternalMonitoring
 )
 
 func init() {
@@ -233,7 +240,7 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 			AggregateDeltas:           *monitoringMetricsAggregateDeltas,
 			DescriptorCacheTTL:        *monitoringDescriptorCacheTTL,
 			DescriptorCacheOnlyGoogle: *monitoringDescriptorCacheOnlyGoogle,
-		}, h.logger, collectors.NewInMemoryDeltaCounterStore(h.logger, *monitoringMetricsDeltasTTL), collectors.NewInMemoryDeltaDistributionStore(h.logger, *monitoringMetricsDeltasTTL))
+		}, h.logger, collectors.NewInMemoryDeltaCounterStore(h.logger, *monitoringMetricsDeltasTTL), collectors.NewInMemoryDeltaDistributionStore(h.logger, *monitoringMetricsDeltasTTL), internalMonitoring)
 		if err != nil {
 			level.Error(h.logger).Log("err", err)
 			os.Exit(1)
@@ -276,6 +283,9 @@ func main() {
 	kingpin.Parse()
 
 	logger := promlog.New(promlogConfig)
+
+	internalMonitoring = collectors.NewInternalMonitoring(*chronosphereShardName)
+	internalMonitoring.Register()
 
 	ctx := context.Background()
 	if *projectID == "" {

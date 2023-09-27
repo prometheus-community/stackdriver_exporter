@@ -51,6 +51,7 @@ type MonitoringCollector struct {
 	lastScrapeErrorMetric           prometheus.Gauge
 	lastScrapeTimestampMetric       prometheus.Gauge
 	lastScrapeDurationSecondsMetric prometheus.Gauge
+	internalMonitoring              *InternalMonitoring
 	collectorFillMissingLabels      bool
 	monitoringDropDelegatedProjects bool
 	logger                          log.Logger
@@ -110,7 +111,7 @@ func (d *googleDescriptorCache) Store(prefix string, data []*monitoring.MetricDe
 	d.inner.Store(prefix, data)
 }
 
-func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, counterStore DeltaCounterStore, distributionStore DeltaDistributionStore) (*MonitoringCollector, error) {
+func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, counterStore DeltaCounterStore, distributionStore DeltaDistributionStore, internalMonitoring *InternalMonitoring) (*MonitoringCollector, error) {
 	const subsystem = "monitoring"
 
 	apiCallsTotalMetric := prometheus.NewCounter(
@@ -180,7 +181,6 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		descriptorCache = &googleDescriptorCache{inner: newDescriptorCache(opts.DescriptorCacheTTL)}
 	} else {
 		descriptorCache = newDescriptorCache(opts.DescriptorCacheTTL)
-
 	}
 
 	monitoringCollector := &MonitoringCollector{
@@ -197,6 +197,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		lastScrapeErrorMetric:           lastScrapeErrorMetric,
 		lastScrapeTimestampMetric:       lastScrapeTimestampMetric,
 		lastScrapeDurationSecondsMetric: lastScrapeDurationSecondsMetric,
+		internalMonitoring:              internalMonitoring,
 		collectorFillMissingLabels:      opts.FillMissingLabels,
 		monitoringDropDelegatedProjects: opts.DropDelegatedProjects,
 		logger:                          logger,
@@ -224,7 +225,7 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 	errorMetric := float64(0)
 	if err := c.reportMonitoringMetrics(ch, begun); err != nil {
 		errorMetric = float64(1)
-		c.scrapeErrorsTotalMetric.Inc()
+		c.internalMonitoring.scrapeErrorsTotalMetric.Inc()
 		level.Error(c.logger).Log("msg", "Error while getting Google Stackdriver Monitoring metrics", "err", err)
 	}
 	c.scrapeErrorsTotalMetric.Collect(ch)
@@ -237,11 +238,21 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 	c.lastScrapeErrorMetric.Set(errorMetric)
 	c.lastScrapeErrorMetric.Collect(ch)
 
-	c.lastScrapeTimestampMetric.Set(float64(time.Now().Unix()))
+	lastScrapeTimestamp := float64(time.Now().Unix())
+
+	c.lastScrapeTimestampMetric.Set(lastScrapeTimestamp)
 	c.lastScrapeTimestampMetric.Collect(ch)
 
-	c.lastScrapeDurationSecondsMetric.Set(time.Since(begun).Seconds())
+	lastScrapeDuration := time.Since(begun).Seconds()
+
+	c.lastScrapeDurationSecondsMetric.Set(lastScrapeDuration)
 	c.lastScrapeDurationSecondsMetric.Collect(ch)
+
+	/* internal monitoring metrics */
+	c.internalMonitoring.scrapesTotalMetric.Inc()
+	c.internalMonitoring.lastScrapeErrorMetric.Set(errorMetric)
+	c.internalMonitoring.lastScrapeTimestampMetric.Set(lastScrapeTimestamp)
+	c.internalMonitoring.lastScrapeDurationSecondsMetric.Set(lastScrapeDuration)
 }
 
 func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metric, begun time.Time) error {
@@ -310,6 +321,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 
 				for {
 					c.apiCallsTotalMetric.Inc()
+					c.internalMonitoring.apiCallsTotalMetric.Inc()
 					page, err := timeSeriesListCall.Do()
 					if err != nil {
 						level.Error(c.logger).Log("msg", "error retrieving Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
@@ -364,7 +376,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				var cache []*monitoring.MetricDescriptor
 
 				callback := func(r *monitoring.ListMetricDescriptorsResponse) error {
-					c.apiCallsTotalMetric.Inc()
+					c.internalMonitoring.apiCallsTotalMetric.Inc()
 					cache = append(cache, r.MetricDescriptors...)
 					return metricDescriptorsFunction(r.MetricDescriptors)
 				}
