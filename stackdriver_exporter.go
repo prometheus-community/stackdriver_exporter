@@ -31,8 +31,10 @@ import (
 	"github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
 	"golang.org/x/net/context"
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
+	"google.golang.org/api/impersonate"
 	"google.golang.org/api/monitoring/v3"
 	"google.golang.org/api/option"
 
@@ -55,6 +57,10 @@ var (
 
 	projectID = kingpin.Flag(
 		"google.project-id", "Comma seperated list of Google Project IDs.",
+	).String()
+
+	impersonateServiceAccount = kingpin.Flag(
+		"google.impersonate-svc-account", "Email address of the service account to impersonate",
 	).String()
 
 	stackdriverMaxRetries = kingpin.Flag(
@@ -121,6 +127,13 @@ var (
 	monitoringDescriptorCacheOnlyGoogle = kingpin.Flag(
 		"monitoring.descriptor-cache-only-google", "Only cache descriptors for *.googleapis.com metrics",
 	).Default("true").Bool()
+
+	/* Chronosphere flags */
+	chronosphereShardName = kingpin.Flag(
+		"chronosphere.shard", "Name of a stackdriver-exporter shard",
+	).Required().String()
+
+	internalMonitoring *collectors.InternalMonitoring
 )
 
 func init() {
@@ -139,10 +152,11 @@ func getDefaultGCPProject(ctx context.Context) (*string, error) {
 }
 
 func createMonitoringService(ctx context.Context) (*monitoring.Service, error) {
-	googleClient, err := google.DefaultClient(ctx, monitoring.MonitoringReadScope)
+	tokenSource, err := getCredentialsTokenSource(ctx, []string{monitoring.MonitoringReadScope})
 	if err != nil {
-		return nil, fmt.Errorf("Error creating Google client: %v", err)
+		return nil, fmt.Errorf("Error retrieving token source: %v", err)
 	}
+	googleClient := oauth2.NewClient(ctx, tokenSource)
 
 	googleClient.Timeout = *stackdriverHttpTimeout
 	googleClient.Transport = rehttp.NewTransport(
@@ -159,6 +173,16 @@ func createMonitoringService(ctx context.Context) (*monitoring.Service, error) {
 	}
 
 	return monitoringService, nil
+}
+
+func getCredentialsTokenSource(ctx context.Context, scopes []string) (oauth2.TokenSource, error) {
+	if *impersonateServiceAccount == "" {
+		return google.DefaultTokenSource(ctx, scopes...)
+	}
+	return impersonate.CredentialsTokenSource(ctx, impersonate.CredentialsConfig{
+		TargetPrincipal: *impersonateServiceAccount,
+		Scopes:          scopes,
+	})
 }
 
 type handler struct {
@@ -216,7 +240,7 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 			AggregateDeltas:           *monitoringMetricsAggregateDeltas,
 			DescriptorCacheTTL:        *monitoringDescriptorCacheTTL,
 			DescriptorCacheOnlyGoogle: *monitoringDescriptorCacheOnlyGoogle,
-		}, h.logger, collectors.NewInMemoryDeltaCounterStore(h.logger, *monitoringMetricsDeltasTTL), collectors.NewInMemoryDeltaDistributionStore(h.logger, *monitoringMetricsDeltasTTL))
+		}, h.logger, collectors.NewInMemoryDeltaCounterStore(h.logger, *monitoringMetricsDeltasTTL), collectors.NewInMemoryDeltaDistributionStore(h.logger, *monitoringMetricsDeltasTTL), internalMonitoring)
 		if err != nil {
 			level.Error(h.logger).Log("err", err)
 			os.Exit(1)
@@ -259,6 +283,9 @@ func main() {
 	kingpin.Parse()
 
 	logger := promlog.New(promlogConfig)
+
+	internalMonitoring = collectors.NewInternalMonitoring(*chronosphereShardName)
+	internalMonitoring.Register()
 
 	ctx := context.Background()
 	if *projectID == "" {
