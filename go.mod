@@ -13,8 +13,8 @@ require (
 	github.com/prometheus/client_model v0.4.0
 	github.com/prometheus/common v0.44.0
 	github.com/prometheus/exporter-toolkit v0.10.0
-	golang.org/x/net v0.12.0
-	golang.org/x/oauth2 v0.10.0
+	golang.org/x/net v0.15.0
+	golang.org/x/oauth2 v0.12.0
 	google.golang.org/api v0.134.0
 )
 
@@ -42,10 +42,10 @@ require (
 	github.com/prometheus/procfs v0.10.1 // indirect
 	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/crypto v0.11.0 // indirect
+	golang.org/x/crypto v0.13.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.10.0 // indirect
-	golang.org/x/text v0.11.0 // indirect
+	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/text v0.13.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230720185612-659f7aaaa771 // indirect
 	google.golang.org/grpc v1.56.2 // indirect
