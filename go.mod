@@ -3,7 +3,7 @@ module github.com/prometheus-community/stackdriver_exporter
 go 1.19
 
 require (
-	github.com/PuerkitoBio/rehttp v1.1.0
+	github.com/PuerkitoBio/rehttp v1.2.0
 	github.com/alecthomas/kingpin/v2 v2.3.2
 	github.com/fatih/camelcase v1.0.0
 	github.com/go-kit/log v0.2.1
