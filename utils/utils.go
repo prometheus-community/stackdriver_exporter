@@ -14,10 +14,12 @@
 package utils
 
 import (
+	"context"
 	"regexp"
 	"strings"
 
 	"github.com/fatih/camelcase"
+	"google.golang.org/api/cloudresourcemanager/v1"
 )
 
 var (
@@ -49,4 +51,26 @@ func GetExtraFilterModifiers(extraFilter string, separator string) (string, stri
 
 func ProjectResource(projectID string) string {
 	return "projects/" + projectID
+}
+
+// GetProjectIDsFromQuery returns a list of project IDs from a Google Cloud organization using a query filter.
+func GetProjectIDsFromQuery(ctx context.Context, query string) ([]string, error) {
+	var projectIDs []string
+
+	service, err := cloudresourcemanager.NewService(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	projects := service.Projects.List().Filter(query)
+	if err := projects.Pages(context.Background(), func(page *cloudresourcemanager.ListProjectsResponse) error {
+		for _, project := range page.Projects {
+			projectIDs = append(projectIDs, project.ProjectId)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return projectIDs, nil
 }
