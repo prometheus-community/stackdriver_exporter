@@ -58,7 +58,7 @@ var (
 	).String()
 
 	projectsQuery = kingpin.Flag(
-		"google.projects.filter", "Google projects search query.",
+		"google.projects.filter", "Google projects search filter.",
 	).String()
 
 	stackdriverMaxRetries = kingpin.Flag(

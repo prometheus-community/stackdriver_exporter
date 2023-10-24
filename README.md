@@ -79,6 +79,7 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 | Flag                                | Required | Default                   | Description                                                                                                                                                                                       |
 | ----------------------------------- | -------- |---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `google.project-id`                 | No       | GCloud SDK auto-discovery | Comma seperated list of Google Project IDs                                                                                                                                                        |
+| `google.projects.filter`            | No       |  | GCloud projects filter expression. See more [here](https://cloud.google.com/sdk/gcloud/reference/projects/list).                                                                                                                                                        |
 | `monitoring.metrics-ingest-delay`   | No       |                           | Offsets metric collection by a delay appropriate for each metric type, e.g. because bigquery metrics are slow to appear                                                                           |
 | `monitoring.drop-delegated-projects` | No       | No                        | Drop metrics from attached projects and fetch `project_id` only.                                                                                                                                  |
 | `monitoring.metrics-type-prefixes`  | Yes      |                           | Comma separated Google Stackdriver Monitoring Metric Type prefixes (see [example][metrics-prefix-example] and [available metrics][metrics-list])                                                  |
@@ -153,6 +154,13 @@ stackdriver_exporter \
  --google.project-id=my-test-project \
  --monitoring.metrics-type-prefixes='pubsub.googleapis.com/subscription' \
  --monitoring.filters='pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match("us-west4.*my-team-subs.*")'
+```
+
+Using projects filter:
+
+```
+stackdriver_exporter \
+  --google.projects.filter='labels.monitoring="true"'
 ```
 
 ### Filtering enabled collectors
