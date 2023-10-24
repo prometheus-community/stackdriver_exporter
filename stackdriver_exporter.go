@@ -57,7 +57,7 @@ var (
 		"google.project-id", "Comma seperated list of Google Project IDs.",
 	).String()
 
-	projectsQuery = kingpin.Flag(
+	projectsFilter = kingpin.Flag(
 		"google.projects.filter", "Google projects search filter.",
 	).String()
 
@@ -265,8 +265,8 @@ func main() {
 	logger := promlog.New(promlogConfig)
 
 	ctx := context.Background()
-	if *projectID == "" && *projectsQuery == "" {
-		level.Info(logger).Log("msg", "Neither projectID nor projectsQuery was provided. Trying to discover it")
+	if *projectID == "" && *projectsFilter == "" {
+		level.Info(logger).Log("msg", "Neither projectID nor projectsFilter was provided. Trying to discover it")
 		var err error
 		projectID, err = getDefaultGCPProject(ctx)
 		if err != nil {
@@ -286,11 +286,11 @@ func main() {
 
 	var projectIDs []string
 
-	if *projectsQuery != "" {
-		level.Info(logger).Log("msg", "Using Google Cloud Projects Query", "projectsQuery", *projectsQuery)
-		projectIDs, err = utils.GetProjectIDsFromQuery(ctx, *projectsQuery)
+	if *projectsFilter != "" {
+		level.Info(logger).Log("msg", "Using Google Cloud Projects Filter", "projectsFilter", *projectsFilter)
+		projectIDs, err = utils.GetProjectIDsFromFilter(ctx, *projectsFilter)
 		if err != nil {
-			level.Error(logger).Log("msg", "failed to get project IDs from query", "err", err)
+			level.Error(logger).Log("msg", "failed to get project IDs from filter", "err", err)
 			os.Exit(1)
 		}
 	}

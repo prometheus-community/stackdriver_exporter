@@ -53,8 +53,8 @@ func ProjectResource(projectID string) string {
 	return "projects/" + projectID
 }
 
-// GetProjectIDsFromQuery returns a list of project IDs from a Google Cloud organization using a query filter.
-func GetProjectIDsFromQuery(ctx context.Context, query string) ([]string, error) {
+// GetProjectIDsFromFilter returns a list of project IDs from a Google Cloud organization using a filter.
+func GetProjectIDsFromFilter(ctx context.Context, filter string) ([]string, error) {
 	var projectIDs []string
 
 	service, err := cloudresourcemanager.NewService(ctx)
@@ -62,7 +62,7 @@ func GetProjectIDsFromQuery(ctx context.Context, query string) ([]string, error)
 		return nil, err
 	}
 
-	projects := service.Projects.List().Filter(query)
+	projects := service.Projects.List().Filter(filter)
 	if err := projects.Pages(context.Background(), func(page *cloudresourcemanager.ListProjectsResponse) error {
 		for _, project := range page.Projects {
 			projectIDs = append(projectIDs, project.ProjectId)
