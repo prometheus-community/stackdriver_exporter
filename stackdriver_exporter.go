@@ -57,6 +57,10 @@ var (
 		"google.project-id", "Comma seperated list of Google Project IDs.",
 	).String()
 
+	projectsFilter = kingpin.Flag(
+		"google.projects.filter", "Google projects search filter.",
+	).String()
+
 	stackdriverMaxRetries = kingpin.Flag(
 		"stackdriver.max-retries", "Max number of retries that should be attempted on 503 errors from stackdriver.",
 	).Default("0").Int()
@@ -261,8 +265,8 @@ func main() {
 	logger := promlog.New(promlogConfig)
 
 	ctx := context.Background()
-	if *projectID == "" {
-		level.Info(logger).Log("msg", "no projectID was provided. Trying to discover it")
+	if *projectID == "" && *projectsFilter == "" {
+		level.Info(logger).Log("msg", "Neither projectID nor projectsFilter was provided. Trying to discover it")
 		var err error
 		projectID, err = getDefaultGCPProject(ctx)
 		if err != nil {
@@ -273,7 +277,6 @@ func main() {
 
 	level.Info(logger).Log("msg", "Starting stackdriver_exporter", "version", version.Info())
 	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
-	level.Info(logger).Log("msg", "Using Google Cloud Project ID", "projectID", *projectID)
 
 	monitoringService, err := createMonitoringService(ctx)
 	if err != nil {
@@ -281,7 +284,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	projectIDs := strings.Split(*projectID, ",")
+	var projectIDs []string
+
+	if *projectsFilter != "" {
+		level.Info(logger).Log("msg", "Using Google Cloud Projects Filter", "projectsFilter", *projectsFilter)
+		projectIDs, err = utils.GetProjectIDsFromFilter(ctx, *projectsFilter)
+		if err != nil {
+			level.Error(logger).Log("msg", "failed to get project IDs from filter", "err", err)
+			os.Exit(1)
+		}
+	}
+
+	if *projectID != "" {
+		projectIDs = append(projectIDs, strings.Split(*projectID, ",")...)
+	}
+
+	level.Info(logger).Log("msg", "Using Google Cloud Project IDs", "projectIDs", fmt.Sprintf("%v", projectIDs))
+
 	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
 	metricExtraFilters := parseMetricExtraFilters()
 
