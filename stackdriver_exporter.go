@@ -125,6 +125,10 @@ var (
 	monitoringDescriptorCacheOnlyGoogle = kingpin.Flag(
 		"monitoring.descriptor-cache-only-google", "Only cache descriptors for *.googleapis.com metrics",
 	).Default("true").Bool()
+
+	monitoringEnablePromHttpCustomLogger = kingpin.Flag(
+		"monitoring.enable-promhttp-custom-logger", "Enable custom logger for promhttp",
+	).Default("false").Bool()
 )
 
 func init() {
@@ -236,7 +240,14 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 	}
 
 	// Delegate http serving to Prometheus client library, which will call collector.Collect.
-	return promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{})
+	opts := promhttp.HandlerOpts{}
+	if *monitoringEnablePromHttpCustomLogger {
+		h.logger.Log("msg", "Enabling custom logger for promhttp")
+		opts = promhttp.HandlerOpts{
+			ErrorLog: NewPromHttpCustomLogger(h.logger),
+		}
+	}
+	return promhttp.HandlerFor(gatherers, opts)
 }
 
 // filterMetricTypePrefixes filters the initial list of metric type prefixes, with the ones coming from an individual
@@ -364,4 +375,18 @@ func parseMetricExtraFilters() []collectors.MetricFilter {
 		}
 	}
 	return extraFilters
+}
+
+type customPromErrorLogger struct {
+	logger log.Logger
+}
+
+func (l *customPromErrorLogger) Println(v ...interface{}) {
+	level.Error(l.logger).Log("msg", fmt.Sprint(v...))
+}
+
+func NewPromHttpCustomLogger(logger log.Logger) *customPromErrorLogger {
+	return &customPromErrorLogger{
+		logger: logger,
+	}
 }
