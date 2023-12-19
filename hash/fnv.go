@@ -11,9 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package collectors
+package hash
 
-const separatorByte = 255
+const SeparatorByte = 255
 
 // https://github.com/prometheus/client_golang/blob/master/prometheus/fnv.go
 // Inline and byte-free variant of hash/fnv's fnv64a.
@@ -23,13 +23,13 @@ const (
 	prime64  = 1099511628211
 )
 
-// hashNew initializies a new fnv64a hash value.
-func hashNew() uint64 {
+// New initializies a new fnv64a hash value.
+func New() uint64 {
 	return offset64
 }
 
-// hashAdd adds a string to a fnv64a hash value, returning the updated hash.
-func hashAdd(h uint64, s string) uint64 {
+// Add adds a string to a fnv64a hash value, returning the updated hash.
+func Add(h uint64, s string) uint64 {
 	for i := 0; i < len(s); i++ {
 		h ^= uint64(s[i])
 		h *= prime64
@@ -37,8 +37,8 @@ func hashAdd(h uint64, s string) uint64 {
 	return h
 }
 
-// hashAddByte adds a byte to a fnv64a hash value, returning the updated hash.
-func hashAddByte(h uint64, b byte) uint64 {
+// AddByte adds a byte to a fnv64a hash value, returning the updated hash.
+func AddByte(h uint64, b byte) uint64 {
 	h ^= uint64(b)
 	h *= prime64
 	return h

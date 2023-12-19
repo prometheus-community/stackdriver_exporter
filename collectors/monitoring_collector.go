@@ -54,8 +54,8 @@ type MonitoringCollector struct {
 	collectorFillMissingLabels      bool
 	monitoringDropDelegatedProjects bool
 	logger                          log.Logger
-	deltaCounterStore               DeltaCounterStore
-	deltaDistributionStore          DeltaDistributionStore
+	counterStore                    DeltaCounterStore
+	histogramStore                  DeltaHistogramStore
 	aggregateDeltas                 bool
 	descriptorCache                 DescriptorCache
 }
@@ -110,7 +110,17 @@ func (d *googleDescriptorCache) Store(prefix string, data []*monitoring.MetricDe
 	d.inner.Store(prefix, data)
 }
 
-func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, counterStore DeltaCounterStore, distributionStore DeltaDistributionStore) (*MonitoringCollector, error) {
+type DeltaCounterStore interface {
+	Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *ConstMetric)
+	ListMetrics(metricDescriptorName string) []*ConstMetric
+}
+
+type DeltaHistogramStore interface {
+	Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *HistogramMetric)
+	ListMetrics(metricDescriptorName string) []*HistogramMetric
+}
+
+func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, counterStore DeltaCounterStore, histogramStore DeltaHistogramStore) (*MonitoringCollector, error) {
 	const subsystem = "monitoring"
 
 	apiCallsTotalMetric := prometheus.NewCounter(
@@ -200,8 +210,8 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		collectorFillMissingLabels:      opts.FillMissingLabels,
 		monitoringDropDelegatedProjects: opts.DropDelegatedProjects,
 		logger:                          logger,
-		deltaCounterStore:               counterStore,
-		deltaDistributionStore:          distributionStore,
+		counterStore:                    counterStore,
+		histogramStore:                  histogramStore,
 		aggregateDeltas:                 opts.AggregateDeltas,
 		descriptorCache:                 descriptorCache,
 	}
@@ -398,11 +408,11 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	var metricValueType prometheus.ValueType
 	var newestTSPoint *monitoring.Point
 
-	timeSeriesMetrics, err := NewTimeSeriesMetrics(metricDescriptor,
+	timeSeriesMetrics, err := newTimeSeriesMetrics(metricDescriptor,
 		ch,
 		c.collectorFillMissingLabels,
-		c.deltaCounterStore,
-		c.deltaDistributionStore,
+		c.counterStore,
+		c.histogramStore,
 		c.aggregateDeltas,
 	)
 	if err != nil {
