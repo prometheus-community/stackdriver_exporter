@@ -10,9 +10,6 @@ issues:
     - path: _test.go
       linters:
         - errcheck
-    - path: utils/test_matchers
-      linters:
-        - errcheck
 
 linters-settings:
   errcheck:
