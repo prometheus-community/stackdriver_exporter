@@ -90,7 +90,7 @@ type ConstMetric struct {
 type HistogramMetric struct {
 	FqName         string
 	LabelKeys      []string
-	Mean           float64
+	Sum            float64
 	Count          uint64
 	Buckets        map[float64]uint64
 	LabelValues    []string
@@ -108,7 +108,7 @@ func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 		v = HistogramMetric{
 			FqName:         fqName,
 			LabelKeys:      labelKeys,
-			Mean:           dist.Mean,
+			Sum:            dist.Mean * float64(dist.Count),
 			Count:          uint64(dist.Count),
 			Buckets:        buckets,
 			LabelValues:    labelValues,
@@ -136,13 +136,13 @@ func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 	t.ch <- t.newConstHistogram(fqName, reportTime, labelKeys, dist.Mean, uint64(dist.Count), buckets, labelValues)
 }
 
-func (t *timeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Time, labelKeys []string, mean float64, count uint64, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
+func (t *timeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Time, labelKeys []string, sum float64, count uint64, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
 	return prometheus.NewMetricWithTimestamp(
 		reportTime,
 		prometheus.MustNewConstHistogram(
 			t.newMetricDesc(fqName, labelKeys),
 			count,
-			mean*float64(count), // Stackdriver does not provide the sum, but we can fake it
+			sum,
 			buckets,
 			labelValues...,
 		),
@@ -249,7 +249,7 @@ func (t *timeSeriesMetrics) completeHistogramMetrics(histograms map[string][]*Hi
 			}
 		}
 		for _, v := range vs {
-			t.ch <- t.newConstHistogram(v.FqName, v.ReportTime, v.LabelKeys, v.Mean, v.Count, v.Buckets, v.LabelValues)
+			t.ch <- t.newConstHistogram(v.FqName, v.ReportTime, v.LabelKeys, v.Sum, v.Count, v.Buckets, v.LabelValues)
 		}
 	}
 }
@@ -314,7 +314,7 @@ func (t *timeSeriesMetrics) completeDeltaHistogramMetrics(reportingStartTime tim
 				collected.FqName,
 				collected.ReportTime,
 				collected.LabelKeys,
-				collected.Mean,
+				collected.Sum,
 				collected.Count,
 				collected.Buckets,
 				collected.LabelValues,
