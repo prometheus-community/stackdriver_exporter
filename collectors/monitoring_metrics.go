@@ -102,13 +102,13 @@ type HistogramMetric struct {
 
 func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string, metricKind string) {
 	fqName := buildFQName(timeSeries)
-
+	histogramSum := dist.Mean * float64(dist.Count)
 	var v HistogramMetric
 	if t.fillMissingLabels || (metricKind == "DELTA" && t.aggregateDeltas) {
 		v = HistogramMetric{
 			FqName:         fqName,
 			LabelKeys:      labelKeys,
-			Sum:            dist.Mean * float64(dist.Count),
+			Sum:            histogramSum,
 			Count:          uint64(dist.Count),
 			Buckets:        buckets,
 			LabelValues:    labelValues,
@@ -133,7 +133,7 @@ func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 		return
 	}
 
-	t.ch <- t.newConstHistogram(fqName, reportTime, labelKeys, dist.Mean, uint64(dist.Count), buckets, labelValues)
+	t.ch <- t.newConstHistogram(fqName, reportTime, labelKeys, histogramSum, uint64(dist.Count), buckets, labelValues)
 }
 
 func (t *timeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Time, labelKeys []string, sum float64, count uint64, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
