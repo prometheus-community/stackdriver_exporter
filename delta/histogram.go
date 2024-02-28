@@ -75,7 +75,9 @@ func (s *InMemoryHistogramStore) Increment(metricDescriptor *monitoring.MetricDe
 
 	if existing.ReportTime.Before(currentValue.ReportTime) {
 		level.Debug(s.logger).Log("msg", "Incrementing existing histogram", "fqName", currentValue.FqName, "key", key, "last_reported_time", existing.ReportTime, "incoming_time", currentValue.ReportTime)
-		entry.Collected[key] = mergeHistograms(existing, currentValue)
+		currentValue.MergeHistogram(existing)
+		// Replace the existing histogram by the new one after merging it.
+		entry.Collected[key] = currentValue
 		return
 	}
 
@@ -99,21 +101,6 @@ func toHistogramKey(hist *collectors.HistogramMetric) uint64 {
 	h = hash.Add(h, hashText)
 
 	return h
-}
-
-func mergeHistograms(existing *collectors.HistogramMetric, current *collectors.HistogramMetric) *collectors.HistogramMetric {
-	// Increment totals based on incoming totals
-	mergedSum := existing.Sum + current.Sum
-	mergedCount := existing.Count + current.Count
-	current.Sum = mergedSum
-	current.Count = mergedCount
-
-	// Merge the buckets from existing in to current
-	for key, value := range existing.Buckets {
-		current.Buckets[key] += value
-	}
-
-	return current
 }
 
 func (s *InMemoryHistogramStore) ListMetrics(metricDescriptorName string) []*collectors.HistogramMetric {

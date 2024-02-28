@@ -100,6 +100,17 @@ type HistogramMetric struct {
 	KeysHash uint64
 }
 
+func (h *HistogramMetric) MergeHistogram(other *HistogramMetric) {
+	// Increment totals based on incoming totals
+	h.Sum += other.Sum
+	h.Count += other.Count
+
+	// Merge the buckets from existing in to current
+	for key, value := range other.Buckets {
+		h.Buckets[key] += value
+	}
+}
+
 func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string, metricKind string) {
 	fqName := buildFQName(timeSeries)
 	histogramSum := dist.Mean * float64(dist.Count)
