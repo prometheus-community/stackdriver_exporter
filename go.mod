@@ -9,8 +9,8 @@ require (
 	github.com/go-kit/log v0.2.1
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.30.0
-	github.com/prometheus/client_golang v1.18.0
-	github.com/prometheus/common v0.45.0
+	github.com/prometheus/client_golang v1.19.0
+	github.com/prometheus/common v0.48.0
 	github.com/prometheus/exporter-toolkit v0.11.0
 	golang.org/x/net v0.21.0
 	golang.org/x/oauth2 v0.17.0
@@ -37,7 +37,6 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
 	github.com/googleapis/gax-go/v2 v2.12.1 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
-	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
