@@ -8,7 +8,7 @@ require (
 	github.com/fatih/camelcase v1.0.0
 	github.com/go-kit/log v0.2.1
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.30.0
+	github.com/onsi/gomega v1.31.1
 	github.com/prometheus/client_golang v1.19.0
 	github.com/prometheus/common v0.48.0
 	github.com/prometheus/exporter-toolkit v0.11.0
