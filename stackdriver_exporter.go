@@ -24,6 +24,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
+	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
@@ -129,7 +130,7 @@ var (
 )
 
 func init() {
-	prometheus.MustRegister(version.NewCollector("stackdriver_exporter"))
+	prometheus.MustRegister(versioncollector.NewCollector("stackdriver_exporter"))
 }
 
 func getDefaultGCPProject(ctx context.Context) (*string, error) {
