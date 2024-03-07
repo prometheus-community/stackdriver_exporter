@@ -33,7 +33,7 @@ For complete instructions on how to compile see: [Building From Source](https://
 For quickly compiling and testing your changes do:
 ```
 # For building.
-go build .
+make build
 ./stackdriver_exporter
 
 # For testing.
