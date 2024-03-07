@@ -33,8 +33,8 @@ For complete instructions on how to compile see: [Building From Source](https://
 For quickly compiling and testing your changes do:
 ```
 # For building.
-go build ./cmd/prometheus/
-./prometheus
+make build
+./stackdriver_exporter
 
 # For testing.
 make test         # Make sure all the tests pass before you commit and push :)
