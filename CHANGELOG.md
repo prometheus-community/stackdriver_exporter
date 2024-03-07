@@ -1,5 +1,10 @@
 ## master / unreleased
 
+## 0.15.0 / 2024-03-07
+
+* [FEATURE] Add projects query #243
+* [ENHANCEMENT] Refactor delta logic for library usage #190
+
 ## 0.14.1 / 2023-05-26
 
 * [BUGFIX] Fix default listening port #229
