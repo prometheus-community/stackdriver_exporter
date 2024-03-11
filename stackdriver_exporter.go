@@ -180,17 +180,14 @@ type handler struct {
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	collectParams := r.URL.Query()["collect"]
-	filters := make(map[string]bool)
-	for _, param := range collectParams {
-		filters[param] = true
+	projectIDsParam := r.URL.Query()["project_ids"]
+
+	projectFilters := make(map[string]bool)
+	for _, projID := range projectIDsParam {
+		projectFilters[projID] = true
 	}
 
-	if len(filters) > 0 {
-		h.innerHandler(filters).ServeHTTP(w, r)
-		return
-	}
-
-	h.handler.ServeHTTP(w, r)
+	h.innerHandler(collectParams, projectFilters).ServeHTTP(w, r)
 }
 
 func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters []collectors.MetricFilter, m *monitoring.Service, logger log.Logger, additionalGatherer prometheus.Gatherer) *handler {
@@ -203,16 +200,20 @@ func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters
 		m:                   m,
 	}
 
-	h.handler = h.innerHandler(nil)
+	h.handler = h.innerHandler(nil, nil)
 	return h
 }
 
-func (h *handler) innerHandler(filters map[string]bool) http.Handler {
+func (h *handler) innerHandler(metricFilters []string, projectFilters map[string]bool) http.Handler {
 	registry := prometheus.NewRegistry()
 
 	for _, project := range h.projectIDs {
+		if len(projectFilters) > 0 && !projectFilters[project] {
+			continue
+		}
+
 		monitoringCollector, err := collectors.NewMonitoringCollector(project, h.m, collectors.MonitoringCollectorOptions{
-			MetricTypePrefixes:        h.filterMetricTypePrefixes(filters),
+			MetricTypePrefixes:        h.filterMetricTypePrefixes(metricFilters),
 			ExtraFilters:              h.metricsExtraFilters,
 			RequestInterval:           *monitoringMetricsInterval,
 			RequestOffset:             *monitoringMetricsOffset,
@@ -243,13 +244,16 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 
 // filterMetricTypePrefixes filters the initial list of metric type prefixes, with the ones coming from an individual
 // prometheus collect request.
-func (h *handler) filterMetricTypePrefixes(filters map[string]bool) []string {
+func (h *handler) filterMetricTypePrefixes(filters []string) []string {
 	filteredPrefixes := h.metricsPrefixes
 	if len(filters) > 0 {
 		filteredPrefixes = nil
-		for _, prefix := range h.metricsPrefixes {
-			if filters[prefix] {
-				filteredPrefixes = append(filteredPrefixes, prefix)
+		for _, calltimePrefix := range filters {
+			for _, preconfiguredPrefix := range h.metricsPrefixes {
+				if strings.HasPrefix(calltimePrefix, preconfiguredPrefix) {
+					filteredPrefixes = append(filteredPrefixes, calltimePrefix)
+					break
+				}
 			}
 		}
 	}
