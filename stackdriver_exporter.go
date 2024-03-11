@@ -213,7 +213,7 @@ func (h *handler) innerHandler(metricFilters []string, projectFilters map[string
 		}
 
 		monitoringCollector, err := collectors.NewMonitoringCollector(project, h.m, collectors.MonitoringCollectorOptions{
-			MetricTypePrefixes:    h.filterMetricTypePrefixes(metricFilters),
+			MetricTypePrefixes:        h.filterMetricTypePrefixes(metricFilters),
 			ExtraFilters:              h.metricsExtraFilters,
 			RequestInterval:           *monitoringMetricsInterval,
 			RequestOffset:             *monitoringMetricsOffset,
