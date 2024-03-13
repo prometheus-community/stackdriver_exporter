@@ -7,7 +7,7 @@
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/prometheus-community/stackdriver_exporter)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-A [Prometheus][prometheus] exporter for [Google Stackdriver Monitoring][stackdriver] metrics. It acts as a proxy that requests Stackdriver API for the metric's time-series every time prometheus scrapes it.
+A [Prometheus][prometheus] exporter for [Google Stackdriver Monitoring][stackdriver] metrics. It acts as a proxy that requests Stackdriver API for the metric's time-series everytime prometheus scrapes it.
 
 ## Installation
 
@@ -167,22 +167,11 @@ stackdriver_exporter \
 
 The `stackdriver_exporter` collects all metrics type prefixes by default.
 
-For advanced uses, the metric prefixes can be filtered by using a repeatable URL param called `collect`. In the Prometheus configuration you can use this syntax under the [scrape config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#<scrape_config>).
+For advanced uses, the collection can be filtered by using a repeatable URL param called `collect`. In the Prometheus configuration you can use you can use this syntax under the [scrape config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#<scrape_config>).
 
 
 ```yaml
 params:
-  collect:
-  - compute.googleapis.com/instance/cpu
-  - compute.googleapis.com/instance/disk
-```
-
-The GCP projects to collect metrics from can also be filtered, using the `project_ids` URL param:
-```yaml
-params:
-  project_ids:
-  - project-a
-  - project-b
   collect:
   - compute.googleapis.com/instance/cpu
   - compute.googleapis.com/instance/disk
