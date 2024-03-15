@@ -306,7 +306,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				}
 
 				for _, ef := range c.metricsFilters {
-					if strings.Contains(metricDescriptor.Type, ef.TargetedMetricPrefix) {
+					if strings.HasPrefix(metricDescriptor.Type, ef.TargetedMetricPrefix) {
 						filter = fmt.Sprintf("%s AND (%s)", filter, ef.FilterQuery)
 					}
 				}
