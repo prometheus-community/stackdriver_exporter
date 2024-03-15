@@ -279,16 +279,6 @@ func main() {
 		}
 	}
 
-	level.Info(logger).Log(
-		"msg", "Starting stackdriver_exporter",
-		"version", version.Info(),
-		"build_context", version.BuildContext(),
-		"projects", *projectID,
-		"metric_prefixes", *monitoringMetricsTypePrefixes,
-		"extra_filters", strings.Join(*monitoringMetricsExtraFilter, ","),
-	)
-	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
-
 	monitoringService, err := createMonitoringService(ctx)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create monitoring service", "err", err)
@@ -298,7 +288,6 @@ func main() {
 	var projectIDs []string
 
 	if *projectsFilter != "" {
-		level.Info(logger).Log("msg", "Using Google Cloud Projects Filter", "projectsFilter", *projectsFilter)
 		projectIDs, err = utils.GetProjectIDsFromFilter(ctx, *projectsFilter)
 		if err != nil {
 			level.Error(logger).Log("msg", "failed to get project IDs from filter", "err", err)
@@ -310,7 +299,16 @@ func main() {
 		projectIDs = append(projectIDs, strings.Split(*projectID, ",")...)
 	}
 
-	level.Info(logger).Log("msg", "Using Google Cloud Project IDs", "projectIDs", fmt.Sprintf("%v", projectIDs))
+	level.Info(logger).Log(
+		"msg", "Starting stackdriver_exporter",
+		"version", version.Info(),
+		"build_context", version.BuildContext(),
+		"projects", *projectID,
+		"metric_prefixes", *monitoringMetricsTypePrefixes,
+		"extra_filters", strings.Join(*monitoringMetricsExtraFilter, ","),
+		"projectIDs", fmt.Sprintf("%v", projectIDs),
+		"projectsFilter", *projectsFilter,
+	)
 
 	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
 	metricExtraFilters := parseMetricExtraFilters()
