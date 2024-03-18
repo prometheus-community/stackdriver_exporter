@@ -85,7 +85,7 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 | `monitoring.metrics-type-prefixes`  | Yes      |                           | Comma separated Google Stackdriver Monitoring Metric Type prefixes (see [example][metrics-prefix-example] and [available metrics][metrics-list])                                                  |
 | `monitoring.metrics-interval`       | No       | `5m`                      | Metric's timestamp interval to request from the Google Stackdriver Monitoring Metrics API. Only the most recent data point is used                                                                |
 | `monitoring.metrics-offset`         | No       | `0s`                      | Offset (into the past) for the metric's timestamp interval to request from the Google Stackdriver Monitoring Metrics API, to handle latency in published metrics                                  |
-| `monitoring.filters`                | No       |                           | Formatted string to allow filtering on certain metrics type                                                                                                                                       |
+| `monitoring.filters`                | No       |                           | Additonal filters to be sent on the Monitoring API call. Add multiple filters by providing this parameter multiple times. See [monitoring.filters](#using-filters) for more info. |
 | `monitoring.aggregate-deltas`       | No       |                           | If enabled will treat all DELTA metrics as an in-memory counter instead of a gauge. Be sure to read [what to know about aggregating DELTA metrics](#what-to-know-about-aggregating-delta-metrics) |
 | `monitoring.aggregate-deltas-ttl`   | No       | `30m`                     | How long should a delta metric continue to be exported and stored after GCP stops producing it. Read [slow moving metrics](#slow-moving-metrics) to understand the problem this attempts to solve |
 | `monitoring.descriptor-cache-ttl`   | No       | `0s`                      | How long should the metric descriptors for a prefixed be cached for                                                                                                                               |
@@ -147,13 +147,33 @@ stackdriver_exporter \
   --monitoring.metrics-type-prefixes "compute.googleapis.com/instance/cpu,compute.googleapis.com/instance/disk"
 ```
 
-Using extra filters:
+### Using filters
 
+The structure for a filter is `<targeted_metric_prefix>:<filter_query>`
+
+The `targeted_metric_prefix` is used to ensure the filter is only applied to the metric_prefix(es) where it makes sense. 
+It does not explicitly have to match a value from `metric_prefixes` but the `targeted_metric_prefix` must be at least a prefix to one or more `metric_prefixes`
+ 
+Example: \
+ metrics_prefixes = pubsub.googleapis.com/snapshot, pubsub.googleapis.com/subscription/num_undelivered_messages \
+ targeted_metric_prefix options would be \ 
+   pubsub.googleapis.com (apply to all defined prefixes) \
+   pubsub.googleapis.com/snapshot (apply to only snapshot metrics) \
+   pubsub.googleapis.com/subscription (apply to only subscription metrics) \
+   pubsub.googleapis.com/subscription/num_undelivered_messages (apply to only the specific subscription metric) \
+
+The `filter_query` will be applied to a final metrics API query when querying for metric data. You can read more about the metric API filter options in GCPs documentation https://cloud.google.com/monitoring/api/v3/filters
+ 
+The final query sent to the metrics API already includes filters for project and metric type. Each applicable `filter_query` will be appended to the query with an AND
+
+Full example
 ```
 stackdriver_exporter \
  --google.project-id=my-test-project \
  --monitoring.metrics-type-prefixes='pubsub.googleapis.com/subscription' \
- --monitoring.filters='pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match("us-west4.*my-team-subs.*")'
+ --monitoring.metrics-type-prefixes='compute.googleapis.com/instance/cpu' \
+ --monitoring.filters='pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match("us-west4.*my-team-subs.*")' \
+ --monitoring.filters='compute.googleapis.com/instance/cpu:resource.labels.instance=monitoring.regex.full_match("us-west4.*my-team-subs.*")' 
 ```
 
 Using projects filter:
