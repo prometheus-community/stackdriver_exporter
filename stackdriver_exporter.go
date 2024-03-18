@@ -242,7 +242,7 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 	// Delegate http serving to Prometheus client library, which will call collector.Collect.
 	opts := promhttp.HandlerOpts{}
 	if *monitoringEnablePromHttpCustomLogger {
-		h.logger.Log("msg", "Enabling custom logger for promhttp")
+		level.Info(h.logger).Log("msg", "Enabling custom logger for promhttp")
 		opts = promhttp.HandlerOpts{
 			ErrorLog: NewPromHttpCustomLogger(h.logger),
 		}
