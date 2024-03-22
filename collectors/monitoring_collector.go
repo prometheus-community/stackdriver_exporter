@@ -324,9 +324,6 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					IntervalEndTime(endTime.Format(time.RFC3339Nano))
 
 				for {
-					if c.metricsDelay != 0 {
-						time.Sleep(c.metricsDelay)
-					}
 					c.apiCallsTotalMetric.Inc()
 					page, err := timeSeriesListCall.Do()
 					if err != nil {
@@ -348,6 +345,9 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					timeSeriesListCall.PageToken(page.NextPageToken)
 				}
 			}(metricDescriptor, ch, startTime, endTime)
+			if c.metricsDelay != 0 {
+				time.Sleep(c.metricsDelay)
+			}
 		}
 
 		wg.Wait()
