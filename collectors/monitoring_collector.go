@@ -324,37 +324,30 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					IntervalEndTime(endTime.Format(time.RFC3339Nano))
 
 				for {
-					t := time.NewTicker(c.metricsDelay)
-					var endLoop bool
-					select {
-					case <-t.C:
-						c.apiCallsTotalMetric.Inc()
-						page, err := timeSeriesListCall.Do()
-						if err != nil {
-							level.Error(c.logger).Log("msg", "error retrieving Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
-							errChannel <- err
-							endLoop = true
-							break
-						}
-						if page == nil {
-							endLoop = true
-							break
-						}
-						if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch, begun); err != nil {
-							level.Error(c.logger).Log("msg", "error reporting Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
-							errChannel <- err
-							endLoop = true
-							break
-						}
-						if page.NextPageToken == "" {
-							endLoop = true
-							break
-						}
-						timeSeriesListCall.PageToken(page.NextPageToken)
+					if c.metricsDelay != 0 {
+						t := time.NewTicker(c.metricsDelay)
+						// Will block until timer goes off
+						<-t.C
 					}
-					if endLoop {
+					c.apiCallsTotalMetric.Inc()
+					page, err := timeSeriesListCall.Do()
+					if err != nil {
+						level.Error(c.logger).Log("msg", "error retrieving Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
+						errChannel <- err
 						break
 					}
+					if page == nil {
+						break
+					}
+					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch, begun); err != nil {
+						level.Error(c.logger).Log("msg", "error reporting Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
+						errChannel <- err
+						break
+					}
+					if page.NextPageToken == "" {
+						break
+					}
+					timeSeriesListCall.PageToken(page.NextPageToken)
 				}
 			}(metricDescriptor, ch, startTime, endTime)
 		}
