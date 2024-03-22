@@ -93,6 +93,10 @@ var (
 		"monitoring.metrics-interval", "Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used.",
 	).Default("5m").Duration()
 
+	monitoringMetricsDelay = kingpin.Flag(
+		"monitoring.metrics-delay", "Interval delay between metrics requests to the Google Stackdriver Monitoring.",
+	).Default("0s").Duration()
+
 	monitoringMetricsOffset = kingpin.Flag(
 		"monitoring.metrics-offset", "Offset for the Google Stackdriver Monitoring Metrics interval into the past.",
 	).Default("0s").Duration()
@@ -215,6 +219,7 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 			MetricTypePrefixes:        h.filterMetricTypePrefixes(filters),
 			ExtraFilters:              h.metricsExtraFilters,
 			RequestInterval:           *monitoringMetricsInterval,
+			RequestDelay:              *monitoringMetricsDelay,
 			RequestOffset:             *monitoringMetricsOffset,
 			IngestDelay:               *monitoringMetricsIngestDelay,
 			FillMissingLabels:         *collectorFillMissingLabels,

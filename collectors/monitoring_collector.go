@@ -42,6 +42,7 @@ type MonitoringCollector struct {
 	metricsTypePrefixes             []string
 	metricsFilters                  []MetricFilter
 	metricsInterval                 time.Duration
+	metricsDelay                    time.Duration
 	metricsOffset                   time.Duration
 	metricsIngestDelay              bool
 	monitoringService               *monitoring.Service
@@ -70,6 +71,9 @@ type MonitoringCollectorOptions struct {
 	// RequestInterval is the time interval used in each request to get metrics. If there are many data points returned
 	// during this interval, only the latest will be reported.
 	RequestInterval time.Duration
+	// RequestDelay is the time interval between each subsequent request to get metrics. If you are receiving a rateLimited
+	// error, this can be increased.
+	RequestDelay time.Duration
 	// RequestOffset is used to offset the requested interval into the past.
 	RequestOffset time.Duration
 	// IngestDelay decides if the ingestion delay specified in the metrics metadata is used when calculating the
@@ -198,6 +202,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		metricsTypePrefixes:             opts.MetricTypePrefixes,
 		metricsFilters:                  opts.ExtraFilters,
 		metricsInterval:                 opts.RequestInterval,
+		metricsDelay:                    opts.RequestDelay,
 		metricsOffset:                   opts.RequestOffset,
 		metricsIngestDelay:              opts.IngestDelay,
 		monitoringService:               monitoringService,
@@ -319,25 +324,37 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					IntervalEndTime(endTime.Format(time.RFC3339Nano))
 
 				for {
-					c.apiCallsTotalMetric.Inc()
-					page, err := timeSeriesListCall.Do()
-					if err != nil {
-						level.Error(c.logger).Log("msg", "error retrieving Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
-						errChannel <- err
+					t := time.NewTicker(c.metricsDelay)
+					var endLoop bool
+					select {
+					case <-t.C:
+						c.apiCallsTotalMetric.Inc()
+						page, err := timeSeriesListCall.Do()
+						if err != nil {
+							level.Error(c.logger).Log("msg", "error retrieving Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
+							errChannel <- err
+							endLoop = true
+							break
+						}
+						if page == nil {
+							endLoop = true
+							break
+						}
+						if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch, begun); err != nil {
+							level.Error(c.logger).Log("msg", "error reporting Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
+							errChannel <- err
+							endLoop = true
+							break
+						}
+						if page.NextPageToken == "" {
+							endLoop = true
+							break
+						}
+						timeSeriesListCall.PageToken(page.NextPageToken)
+					}
+					if endLoop {
 						break
 					}
-					if page == nil {
-						break
-					}
-					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch, begun); err != nil {
-						level.Error(c.logger).Log("msg", "error reporting Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
-						errChannel <- err
-						break
-					}
-					if page.NextPageToken == "" {
-						break
-					}
-					timeSeriesListCall.PageToken(page.NextPageToken)
 				}
 			}(metricDescriptor, ch, startTime, endTime)
 		}
