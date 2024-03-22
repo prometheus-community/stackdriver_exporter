@@ -325,9 +325,8 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 
 				for {
 					if c.metricsDelay != 0 {
-						t := time.NewTicker(c.metricsDelay)
 						// Will block until timer goes off
-						<-t.C
+						<-time.NewTicker(c.metricsDelay).C
 					}
 					c.apiCallsTotalMetric.Inc()
 					page, err := timeSeriesListCall.Do()
