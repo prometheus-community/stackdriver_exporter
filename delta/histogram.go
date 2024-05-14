@@ -75,7 +75,9 @@ func (s *InMemoryHistogramStore) Increment(metricDescriptor *monitoring.MetricDe
 
 	if existing.ReportTime.Before(currentValue.ReportTime) {
 		level.Debug(s.logger).Log("msg", "Incrementing existing histogram", "fqName", currentValue.FqName, "key", key, "last_reported_time", existing.ReportTime, "incoming_time", currentValue.ReportTime)
-		entry.Collected[key] = mergeHistograms(existing, currentValue)
+		currentValue.MergeHistogram(existing)
+		// Replace the existing histogram by the new one after merging it.
+		entry.Collected[key] = currentValue
 		return
 	}
 
@@ -101,27 +103,6 @@ func toHistogramKey(hist *collectors.HistogramMetric) uint64 {
 	return h
 }
 
-func mergeHistograms(existing *collectors.HistogramMetric, current *collectors.HistogramMetric) *collectors.HistogramMetric {
-	for key, value := range existing.Buckets {
-		current.Buckets[key] += value
-	}
-
-	// Calculate a new mean and overall count
-	mean := existing.Mean
-	mean += current.Mean
-	mean /= 2
-
-	var count uint64
-	for _, v := range current.Buckets {
-		count += v
-	}
-
-	current.Mean = mean
-	current.Count = count
-
-	return current
-}
-
 func (s *InMemoryHistogramStore) ListMetrics(metricDescriptorName string) []*collectors.HistogramMetric {
 	var output []*collectors.HistogramMetric
 	now := time.Now()
@@ -136,7 +117,7 @@ func (s *InMemoryHistogramStore) ListMetrics(metricDescriptorName string) []*col
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 	for key, collected := range entry.Collected {
-		//Scan and remove metrics which are outside the TTL
+		// Scan and remove metrics which are outside the TTL
 		if ttlWindowStart.After(collected.CollectionTime) {
 			level.Debug(s.logger).Log("msg", "Deleting histogram entry outside of TTL", "key", key, "fqName", collected.FqName)
 			delete(entry.Collected, key)

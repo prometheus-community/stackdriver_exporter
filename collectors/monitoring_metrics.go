@@ -90,7 +90,7 @@ type ConstMetric struct {
 type HistogramMetric struct {
 	FqName         string
 	LabelKeys      []string
-	Mean           float64
+	Sum            float64
 	Count          uint64
 	Buckets        map[float64]uint64
 	LabelValues    []string
@@ -100,15 +100,26 @@ type HistogramMetric struct {
 	KeysHash uint64
 }
 
+func (h *HistogramMetric) MergeHistogram(other *HistogramMetric) {
+	// Increment totals based on incoming totals
+	h.Sum += other.Sum
+	h.Count += other.Count
+
+	// Merge the buckets from existing in to current
+	for key, value := range other.Buckets {
+		h.Buckets[key] += value
+	}
+}
+
 func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.TimeSeries, reportTime time.Time, labelKeys []string, dist *monitoring.Distribution, buckets map[float64]uint64, labelValues []string, metricKind string) {
 	fqName := buildFQName(timeSeries)
-
+	histogramSum := dist.Mean * float64(dist.Count)
 	var v HistogramMetric
 	if t.fillMissingLabels || (metricKind == "DELTA" && t.aggregateDeltas) {
 		v = HistogramMetric{
 			FqName:         fqName,
 			LabelKeys:      labelKeys,
-			Mean:           dist.Mean,
+			Sum:            histogramSum,
 			Count:          uint64(dist.Count),
 			Buckets:        buckets,
 			LabelValues:    labelValues,
@@ -133,16 +144,16 @@ func (t *timeSeriesMetrics) CollectNewConstHistogram(timeSeries *monitoring.Time
 		return
 	}
 
-	t.ch <- t.newConstHistogram(fqName, reportTime, labelKeys, dist.Mean, uint64(dist.Count), buckets, labelValues)
+	t.ch <- t.newConstHistogram(fqName, reportTime, labelKeys, histogramSum, uint64(dist.Count), buckets, labelValues)
 }
 
-func (t *timeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Time, labelKeys []string, mean float64, count uint64, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
+func (t *timeSeriesMetrics) newConstHistogram(fqName string, reportTime time.Time, labelKeys []string, sum float64, count uint64, buckets map[float64]uint64, labelValues []string) prometheus.Metric {
 	return prometheus.NewMetricWithTimestamp(
 		reportTime,
 		prometheus.MustNewConstHistogram(
 			t.newMetricDesc(fqName, labelKeys),
 			count,
-			mean*float64(count), // Stackdriver does not provide the sum, but we can fake it
+			sum,
 			buckets,
 			labelValues...,
 		),
@@ -249,7 +260,7 @@ func (t *timeSeriesMetrics) completeHistogramMetrics(histograms map[string][]*Hi
 			}
 		}
 		for _, v := range vs {
-			t.ch <- t.newConstHistogram(v.FqName, v.ReportTime, v.LabelKeys, v.Mean, v.Count, v.Buckets, v.LabelValues)
+			t.ch <- t.newConstHistogram(v.FqName, v.ReportTime, v.LabelKeys, v.Sum, v.Count, v.Buckets, v.LabelValues)
 		}
 	}
 }
@@ -314,7 +325,7 @@ func (t *timeSeriesMetrics) completeDeltaHistogramMetrics(reportingStartTime tim
 				collected.FqName,
 				collected.ReportTime,
 				collected.LabelKeys,
-				collected.Mean,
+				collected.Sum,
 				collected.Count,
 				collected.Buckets,
 				collected.LabelValues,
