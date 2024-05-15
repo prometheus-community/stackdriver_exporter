@@ -1,5 +1,9 @@
 ## master / unreleased
 
+## 0.15.1 / 2024-05-15
+
+* [BUGFIX] Fix histogram merge #324
+
 ## 0.15.0 / 2024-03-07
 
 * [FEATURE] Add projects query #243
