@@ -41,7 +41,7 @@ func NormalizeMetricName(metricName string) string {
 	return strings.Join(normalizedMetricName, "_")
 }
 
-func GetExtraFilterModifiers(extraFilter string, separator string) (string, string) {
+func SplitExtraFilter(extraFilter string, separator string) (string, string) {
 	mPrefix := strings.Split(extraFilter, separator)
 	if mPrefix[0] == extraFilter {
 		return "", ""

@@ -110,7 +110,9 @@ var (
 	).Default("false").Bool()
 
 	monitoringMetricsExtraFilter = kingpin.Flag(
-		"monitoring.filters", "Filters. i.e: pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")").Strings()
+		"monitoring.filters",
+		"Filters. i.e: pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")",
+	).Strings()
 
 	monitoringMetricsAggregateDeltas = kingpin.Flag(
 		"monitoring.aggregate-deltas", "If enabled will treat all DELTA metrics as an in-memory counter instead of a gauge",
@@ -277,9 +279,6 @@ func main() {
 		}
 	}
 
-	level.Info(logger).Log("msg", "Starting stackdriver_exporter", "version", version.Info())
-	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
-
 	monitoringService, err := createMonitoringService(ctx)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create monitoring service", "err", err)
@@ -289,7 +288,6 @@ func main() {
 	var projectIDs []string
 
 	if *projectsFilter != "" {
-		level.Info(logger).Log("msg", "Using Google Cloud Projects Filter", "projectsFilter", *projectsFilter)
 		projectIDs, err = utils.GetProjectIDsFromFilter(ctx, *projectsFilter)
 		if err != nil {
 			level.Error(logger).Log("msg", "failed to get project IDs from filter", "err", err)
@@ -301,7 +299,16 @@ func main() {
 		projectIDs = append(projectIDs, strings.Split(*projectID, ",")...)
 	}
 
-	level.Info(logger).Log("msg", "Using Google Cloud Project IDs", "projectIDs", fmt.Sprintf("%v", projectIDs))
+	level.Info(logger).Log(
+		"msg", "Starting stackdriver_exporter",
+		"version", version.Info(),
+		"build_context", version.BuildContext(),
+		"projects", *projectID,
+		"metric_prefixes", *monitoringMetricsTypePrefixes,
+		"extra_filters", strings.Join(*monitoringMetricsExtraFilter, ","),
+		"projectIDs", fmt.Sprintf("%v", projectIDs),
+		"projectsFilter", *projectsFilter,
+	)
 
 	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
 	metricExtraFilters := parseMetricExtraFilters()
@@ -356,11 +363,11 @@ func main() {
 func parseMetricExtraFilters() []collectors.MetricFilter {
 	var extraFilters []collectors.MetricFilter
 	for _, ef := range *monitoringMetricsExtraFilter {
-		efPrefix, efModifier := utils.GetExtraFilterModifiers(ef, ":")
-		if efPrefix != "" {
+		targetedMetricPrefix, filterQuery := utils.SplitExtraFilter(ef, ":")
+		if targetedMetricPrefix != "" {
 			extraFilter := collectors.MetricFilter{
-				Prefix:   efPrefix,
-				Modifier: efModifier,
+				TargetedMetricPrefix: strings.ToLower(targetedMetricPrefix),
+				FilterQuery:          filterQuery,
 			}
 			extraFilters = append(extraFilters, extraFilter)
 		}
