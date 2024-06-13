@@ -304,7 +304,8 @@ func main() {
 
 	level.Info(logger).Log("msg", "Using Google Cloud Project IDs", "projectIDs", fmt.Sprintf("%v", projectIDs))
 
-	metricsTypePrefixes := parseMetricTypePrefixes()
+	inputPrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
+	metricsTypePrefixes := parseMetricTypePrefixes(inputPrefixes)
 	metricExtraFilters := parseMetricExtraFilters()
 
 	if *metricsPath == *stackdriverMetricsPath {
@@ -354,9 +355,7 @@ func main() {
 	}
 }
 
-func parseMetricTypePrefixes() (metricTypePrefixes []string) {
-	inputPrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
-
+func parseMetricTypePrefixes(inputPrefixes []string) (metricTypePrefixes []string) {
 	// only keep unique prefixes
 	uniqueKeys := make(map[string]bool)
 	uniquePrefixes := []string{}
