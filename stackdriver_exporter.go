@@ -382,12 +382,6 @@ func parseMetricTypePrefixes() (metricTypePrefixes []string) {
 				continue
 			}
 
-			// previous prefix starts with current prefix
-			if strings.HasPrefix(metricTypePrefixes[previousIndex], prefix) {
-				// drop previous prefix
-				metricTypePrefixes = metricTypePrefixes[:previousIndex]
-			}
-
 			metricTypePrefixes = append(metricTypePrefixes, prefix)
 		}
 	}
