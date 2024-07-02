@@ -15,6 +15,7 @@ package main
 
 import (
 	"fmt"
+	stdlog "log"
 	"net/http"
 	"os"
 	"strings"
@@ -238,9 +239,9 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 			registry,
 		}
 	}
-
+	opts := promhttp.HandlerOpts{ErrorLog: stdlog.New(log.NewStdlibAdapter(level.Error(h.logger)), "", 0)}
 	// Delegate http serving to Prometheus client library, which will call collector.Collect.
-	return promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{})
+	return promhttp.HandlerFor(gatherers, opts)
 }
 
 // filterMetricTypePrefixes filters the initial list of metric type prefixes, with the ones coming from an individual
