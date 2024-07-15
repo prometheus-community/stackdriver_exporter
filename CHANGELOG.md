@@ -1,6 +1,6 @@
 ## master / unreleased
 
-## 0.15.2 / 2024-07-15
+## 0.16.0 / 2024-07-15
 
 * [FEATURE] Add ErrorLogger for promhttp #277
 * [ENHANCEMENT] Add more info about filters to docs and rename struct fields #198
