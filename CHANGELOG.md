@@ -1,5 +1,10 @@
 ## master / unreleased
 
+## 0.16.0 / 2024-07-15
+
+* [FEATURE] Add ErrorLogger for promhttp #277
+* [ENHANCEMENT] Add more info about filters to docs and rename struct fields #198
+
 ## 0.15.1 / 2024-05-15
 
 * [BUGFIX] Fix histogram merge #324
