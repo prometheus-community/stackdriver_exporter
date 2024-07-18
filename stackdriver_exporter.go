@@ -18,6 +18,7 @@ import (
 	stdlog "log"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/PuerkitoBio/rehttp"
@@ -311,7 +312,8 @@ func main() {
 		"projectsFilter", *projectsFilter,
 	)
 
-	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
+	inputPrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
+	metricsTypePrefixes := parseMetricTypePrefixes(inputPrefixes)
 	metricExtraFilters := parseMetricExtraFilters()
 
 	if *metricsPath == *stackdriverMetricsPath {
@@ -359,6 +361,39 @@ func main() {
 		level.Error(logger).Log("msg", "Error starting server", "err", err)
 		os.Exit(1)
 	}
+}
+
+func parseMetricTypePrefixes(inputPrefixes []string) (metricTypePrefixes []string) {
+	// only keep unique prefixes
+	uniqueKeys := make(map[string]bool)
+	uniquePrefixes := []string{}
+	for _, prefix := range inputPrefixes {
+		if _, ok := uniqueKeys[prefix]; !ok {
+			uniqueKeys[prefix] = true
+			uniquePrefixes = append(uniquePrefixes, prefix)
+		}
+	}
+
+	// drop prefixes that start with another existing prefix to avoid error:
+	// "collected metric xxx was collected before with the same name and label values"
+	slices.Sort(uniquePrefixes)
+	for i, prefix := range uniquePrefixes {
+		if i == 0 {
+			metricTypePrefixes = []string{prefix}
+		} else {
+			previousIndex := len(metricTypePrefixes) - 1
+
+			// current prefix starts with previous one
+			if strings.HasPrefix(prefix, metricTypePrefixes[previousIndex]) {
+				// drop current prefix
+				continue
+			}
+
+			metricTypePrefixes = append(metricTypePrefixes, prefix)
+		}
+	}
+
+	return metricTypePrefixes
 }
 
 func parseMetricExtraFilters() []collectors.MetricFilter {
