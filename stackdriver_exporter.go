@@ -56,9 +56,9 @@ var (
 		"web.stackdriver-telemetry-path", "Path under which to expose Stackdriver metrics.",
 	).Default("/metrics").String()
 
-	projectID = kingpin.Flag(
-		"google.project-id", "Comma seperated list of Google Project IDs.",
-	).String()
+	projectIDs = kingpin.Flag(
+		"google.project-id", "Google Project IDs. Repeat this flag for multiple projects.",
+	).Strings()
 
 	projectsFilter = kingpin.Flag(
 		"google.projects.filter", "Google projects search filter.",
@@ -86,9 +86,9 @@ var (
 
 	// Monitoring collector flags
 
-	monitoringMetricsTypePrefixes = kingpin.Flag(
-		"monitoring.metrics-type-prefixes", "Comma separated Google Stackdriver Monitoring Metric Type prefixes.",
-	).Required().String()
+	monitoringMetricsPrefixes = kingpin.Flag(
+		"monitoring.metrics-prefixes", "Google Stackdriver Monitoring Metric Type prefixes. Repeat this flag to scrape multiple prefixes.",
+	).Required().Strings()
 
 	monitoringMetricsInterval = kingpin.Flag(
 		"monitoring.metrics-interval", "Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used.",
@@ -136,7 +136,7 @@ func init() {
 	prometheus.MustRegister(versioncollector.NewCollector("stackdriver_exporter"))
 }
 
-func getDefaultGCPProject(ctx context.Context) (*string, error) {
+func getDefaultGCPProject(ctx context.Context) (*[]string, error) {
 	credentials, err := google.FindDefaultCredentials(ctx, compute.ComputeScope)
 	if err != nil {
 		return nil, err
@@ -144,7 +144,7 @@ func getDefaultGCPProject(ctx context.Context) (*string, error) {
 	if credentials.ProjectID == "" {
 		return nil, fmt.Errorf("unable to identify the gcloud project. Got empty string")
 	}
-	return &credentials.ProjectID, nil
+	return &[]string{credentials.ProjectID}, nil
 }
 
 func createMonitoringService(ctx context.Context) (*monitoring.Service, error) {
@@ -270,10 +270,10 @@ func main() {
 	logger := promlog.New(promlogConfig)
 
 	ctx := context.Background()
-	if *projectID == "" && *projectsFilter == "" {
+	if len(*projectIDs) == 0 && *projectsFilter == "" {
 		level.Info(logger).Log("msg", "Neither projectID nor projectsFilter was provided. Trying to discover it")
 		var err error
-		projectID, err = getDefaultGCPProject(ctx)
+		projectIDs, err = getDefaultGCPProject(ctx)
 		if err != nil {
 			level.Error(logger).Log("msg", "no explicit projectID and error trying to discover default GCloud project", "err", err)
 			os.Exit(1)
@@ -286,42 +286,41 @@ func main() {
 		os.Exit(1)
 	}
 
-	var projectIDs []string
+	var discoveredProjectIDs []string
 
 	if *projectsFilter != "" {
-		projectIDs, err = utils.GetProjectIDsFromFilter(ctx, *projectsFilter)
+		discoveredProjectIDs, err = utils.GetProjectIDsFromFilter(ctx, *projectsFilter)
 		if err != nil {
 			level.Error(logger).Log("msg", "failed to get project IDs from filter", "err", err)
 			os.Exit(1)
 		}
 	}
 
-	if *projectID != "" {
-		projectIDs = append(projectIDs, strings.Split(*projectID, ",")...)
+	if len(*projectIDs) > 0 {
+		discoveredProjectIDs = append(discoveredProjectIDs, *projectIDs...)
 	}
 
 	level.Info(logger).Log(
 		"msg", "Starting stackdriver_exporter",
 		"version", version.Info(),
 		"build_context", version.BuildContext(),
-		"projects", *projectID,
-		"metric_prefixes", *monitoringMetricsTypePrefixes,
+		"projects", *projectIDs,
+		"metric_prefixes", *monitoringMetricsPrefixes,
 		"extra_filters", strings.Join(*monitoringMetricsExtraFilter, ","),
-		"projectIDs", fmt.Sprintf("%v", projectIDs),
+		"projectIDs", fmt.Sprintf("%v", discoveredProjectIDs),
 		"projectsFilter", *projectsFilter,
 	)
 
-	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
 	metricExtraFilters := parseMetricExtraFilters()
 
 	if *metricsPath == *stackdriverMetricsPath {
 		handler := newHandler(
-			projectIDs, metricsTypePrefixes, metricExtraFilters, monitoringService, logger, prometheus.DefaultGatherer)
+			discoveredProjectIDs, *monitoringMetricsPrefixes, metricExtraFilters, monitoringService, logger, prometheus.DefaultGatherer)
 		http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 	} else {
 		level.Info(logger).Log("msg", "Serving Stackdriver metrics at separate path", "path", *stackdriverMetricsPath)
 		handler := newHandler(
-			projectIDs, metricsTypePrefixes, metricExtraFilters, monitoringService, logger, nil)
+			discoveredProjectIDs, *monitoringMetricsPrefixes, metricExtraFilters, monitoringService, logger, nil)
 		http.Handle(*stackdriverMetricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 		http.Handle(*metricsPath, promhttp.Handler())
 	}
