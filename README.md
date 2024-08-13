@@ -170,8 +170,7 @@ Full example
 ```
 stackdriver_exporter \
  --google.project-id=my-test-project \
- --monitoring.metrics-type-prefixes='pubsub.googleapis.com/subscription' \
- --monitoring.metrics-type-prefixes='compute.googleapis.com/instance/cpu' \
+ --monitoring.metrics-type-prefixes='pubsub.googleapis.com/subscription,compute.googleapis.com/instance/cpu' \
  --monitoring.filters='pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match("us-west4.*my-team-subs.*")' \
  --monitoring.filters='compute.googleapis.com/instance/cpu:resource.labels.instance=monitoring.regex.full_match("us-west4.*my-team-subs.*")' 
 ```
