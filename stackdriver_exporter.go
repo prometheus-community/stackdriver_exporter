@@ -356,21 +356,20 @@ func main() {
 }
 
 func parseMetricTypePrefixes(inputPrefixes []string) (metricTypePrefixes []string) {
-	// drop duplicate prefixes
+	// Drop duplicate prefixes.
 	slices.Sort(inputPrefixes)
 	uniquePrefixes := slices.Compact(inputPrefixes)
 
-	// drop prefixes that start with another existing prefix to avoid error:
-	// "collected metric xxx was collected before with the same name and label values"
+	// Drop prefixes that start with another existing prefix to avoid error:
+	// "collected metric xxx was collected before with the same name and label values".
 	for i, prefix := range uniquePrefixes {
 		if i == 0 {
 			metricTypePrefixes = []string{prefix}
 		} else {
 			previousIndex := len(metricTypePrefixes) - 1
 
-			// current prefix starts with previous one
+			// Drop current prefix if it starts with the previous one.
 			if strings.HasPrefix(prefix, metricTypePrefixes[previousIndex]) {
-				// drop current prefix
 				continue
 			}
 
