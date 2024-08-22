@@ -365,18 +365,15 @@ func parseMetricTypePrefixes(inputPrefixes []string) []string {
 	// Drop prefixes that start with another existing prefix to avoid error:
 	// "collected metric xxx was collected before with the same name and label values".
 	for i, prefix := range uniquePrefixes {
-		if i == 0 {
-			metricTypePrefixes = append(metricTypePrefixes, prefix)
-		} else {
+		if i != 0 {
 			previousIndex := len(metricTypePrefixes) - 1
 
 			// Drop current prefix if it starts with the previous one.
 			if strings.HasPrefix(prefix, metricTypePrefixes[previousIndex]) {
 				continue
 			}
-
-			metricTypePrefixes = append(metricTypePrefixes, prefix)
 		}
+		metricTypePrefixes = append(metricTypePrefixes, prefix)
 	}
 
 	return metricTypePrefixes
