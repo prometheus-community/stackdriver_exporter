@@ -355,7 +355,9 @@ func main() {
 	}
 }
 
-func parseMetricTypePrefixes(inputPrefixes []string) (metricTypePrefixes []string) {
+func parseMetricTypePrefixes(inputPrefixes []string) []string {
+	metricTypePrefixes := []string{}
+
 	// Drop duplicate prefixes.
 	slices.Sort(inputPrefixes)
 	uniquePrefixes := slices.Compact(inputPrefixes)
@@ -364,7 +366,7 @@ func parseMetricTypePrefixes(inputPrefixes []string) (metricTypePrefixes []strin
 	// "collected metric xxx was collected before with the same name and label values".
 	for i, prefix := range uniquePrefixes {
 		if i == 0 {
-			metricTypePrefixes = []string{prefix}
+			metricTypePrefixes = append(metricTypePrefixes, prefix)
 		} else {
 			previousIndex := len(metricTypePrefixes) - 1
 
