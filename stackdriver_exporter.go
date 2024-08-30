@@ -18,6 +18,7 @@ import (
 	stdlog "log"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/PuerkitoBio/rehttp"
@@ -311,7 +312,8 @@ func main() {
 		"projectsFilter", *projectsFilter,
 	)
 
-	metricsTypePrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
+	inputPrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
+	metricsTypePrefixes := parseMetricTypePrefixes(inputPrefixes)
 	metricExtraFilters := parseMetricExtraFilters()
 
 	if *metricsPath == *stackdriverMetricsPath {
@@ -359,6 +361,30 @@ func main() {
 		level.Error(logger).Log("msg", "Error starting server", "err", err)
 		os.Exit(1)
 	}
+}
+
+func parseMetricTypePrefixes(inputPrefixes []string) []string {
+	metricTypePrefixes := []string{}
+
+	// Drop duplicate prefixes.
+	slices.Sort(inputPrefixes)
+	uniquePrefixes := slices.Compact(inputPrefixes)
+
+	// Drop prefixes that start with another existing prefix to avoid error:
+	// "collected metric xxx was collected before with the same name and label values".
+	for i, prefix := range uniquePrefixes {
+		if i != 0 {
+			previousIndex := len(metricTypePrefixes) - 1
+
+			// Drop current prefix if it starts with the previous one.
+			if strings.HasPrefix(prefix, metricTypePrefixes[previousIndex]) {
+				continue
+			}
+		}
+		metricTypePrefixes = append(metricTypePrefixes, prefix)
+	}
+
+	return metricTypePrefixes
 }
 
 func parseMetricExtraFilters() []collectors.MetricFilter {
