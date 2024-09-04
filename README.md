@@ -78,7 +78,7 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 
 | Flag                                | Required | Default                   | Description                                                                                                                                                                                       |
 | ----------------------------------- | -------- |---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `google.project-id`                 | No       | GCloud SDK auto-discovery | Repeatable flag of Google Project IDs                                                                                                                                                        |
+| `google.project-ids`                 | No       | GCloud SDK auto-discovery | Repeatable flag of Google Project IDs                                                                                                                                                        |
 | `google.projects.filter`            | No       |                           | GCloud projects filter expression. See more [here](https://cloud.google.com/sdk/gcloud/reference/projects/list).                                                                                                                                                        |
 | `monitoring.metrics-ingest-delay`   | No       |                           | Offsets metric collection by a delay appropriate for each metric type, e.g. because bigquery metrics are slow to appear                                                                           |
 | `monitoring.drop-delegated-projects` | No       | No                        | Drop metrics from attached projects and fetch `project_id` only.                                                                                                                                  |
@@ -143,7 +143,7 @@ If we want to get all `CPU` (`compute.googleapis.com/instance/cpu`) and `Disk` (
 
 ```
 stackdriver_exporter \
-  --google.project-id=my-test-project \
+  --google.project-ids=my-test-project \
   --monitoring.metrics-prefixes "compute.googleapis.com/instance/cpu"
   --monitoring.metrics-prefixes "compute.googleapis.com/instance/disk"
 ```
@@ -170,7 +170,7 @@ The final query sent to the metrics API already includes filters for project and
 Full example
 ```
 stackdriver_exporter \
- --google.project-id=my-test-project \
+ --google.project-ids=my-test-project \
  --monitoring.metrics-prefixes='pubsub.googleapis.com/subscription' \
  --monitoring.metrics-prefixes='compute.googleapis.com/instance/cpu' \
  --monitoring.filters='pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match("us-west4.*my-team-subs.*")' \
