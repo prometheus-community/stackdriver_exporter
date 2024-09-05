@@ -123,6 +123,8 @@ type DeltaHistogramStore interface {
 func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, counterStore DeltaCounterStore, histogramStore DeltaHistogramStore) (*MonitoringCollector, error) {
 	const subsystem = "monitoring"
 
+	logger = log.With(logger, "project_id", projectID)
+
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace:   namespace,
