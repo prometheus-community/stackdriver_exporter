@@ -1,6 +1,7 @@
 module github.com/prometheus-community/stackdriver_exporter
 
 go 1.21
+toolchain go1.22.5
 
 require (
 	github.com/PuerkitoBio/rehttp v1.4.0
@@ -8,7 +9,7 @@ require (
 	github.com/fatih/camelcase v1.0.0
 	github.com/go-kit/log v0.2.1
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.34.1
+	github.com/onsi/gomega v1.34.2
 	github.com/prometheus/client_golang v1.20.2
 	github.com/prometheus/common v0.58.0
 	github.com/prometheus/exporter-toolkit v0.11.0
@@ -50,7 +51,6 @@ require (
 	go.opentelemetry.io/otel/metric v1.24.0 // indirect
 	go.opentelemetry.io/otel/trace v1.24.0 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
-	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.24.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
