@@ -1,5 +1,13 @@
 ## master / unreleased
 
+## 0.17.0 / 2024-10-08
+
+Deprecation notice: The comma delimited flags `google.project-id` and `monitoring.metrics-type-prefixes` are being replaced by repeatable flags `google.project-ids` and `monitoring.metrics-prefixes`. The comma delimited flags will be supported for at least one more release. 
+
+- [ENHANCEMENT] Sanitize metric type prefixes to prevent duplicate metrics #319
+- [ENHANCEMENT] Add project ID to all logs from the collector #362
+- [FEATURE] Add support for specifying comma-delimited string flags as repeatable flags #355 
+
 ## 0.16.0 / 2024-07-15
 
 * [FEATURE] Add ErrorLogger for promhttp #277
