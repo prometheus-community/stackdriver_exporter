@@ -78,11 +78,11 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 
 | Flag                                | Required | Default                   | Description                                                                                                                                                                                       |
 | ----------------------------------- | -------- |---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `google.project-id`                 | No       | GCloud SDK auto-discovery | Comma seperated list of Google Project IDs                                                                                                                                                        |
+| `google.project-ids`                 | No       | GCloud SDK auto-discovery | Repeatable flag of Google Project IDs                                                                                                                                                        |
 | `google.projects.filter`            | No       |                           | GCloud projects filter expression. See more [here](https://cloud.google.com/sdk/gcloud/reference/projects/list).                                                                                                                                                        |
 | `monitoring.metrics-ingest-delay`   | No       |                           | Offsets metric collection by a delay appropriate for each metric type, e.g. because bigquery metrics are slow to appear                                                                           |
 | `monitoring.drop-delegated-projects` | No       | No                        | Drop metrics from attached projects and fetch `project_id` only.                                                                                                                                  |
-| `monitoring.metrics-type-prefixes`  | Yes      |                           | Comma separated Google Stackdriver Monitoring Metric Type prefixes (see [example][metrics-prefix-example] and [available metrics][metrics-list])                                                  |
+| `monitoring.metrics-prefixes`  | Yes      |                           | Repeatable flag of Google Stackdriver Monitoring Metric Type prefixes (see [example][metrics-prefix-example] and [available metrics][metrics-list])                                                  |
 | `monitoring.metrics-interval`       | No       | `5m`                      | Metric's timestamp interval to request from the Google Stackdriver Monitoring Metrics API. Only the most recent data point is used                                                                |
 | `monitoring.metrics-offset`         | No       | `0s`                      | Offset (into the past) for the metric's timestamp interval to request from the Google Stackdriver Monitoring Metrics API, to handle latency in published metrics                                  |
 | `monitoring.filters`                | No       |                           | Additonal filters to be sent on the Monitoring API call. Add multiple filters by providing this parameter multiple times. See [monitoring.filters](#using-filters) for more info. |
@@ -143,8 +143,9 @@ If we want to get all `CPU` (`compute.googleapis.com/instance/cpu`) and `Disk` (
 
 ```
 stackdriver_exporter \
-  --google.project-id=my-test-project \
-  --monitoring.metrics-type-prefixes "compute.googleapis.com/instance/cpu,compute.googleapis.com/instance/disk"
+  --google.project-ids=my-test-project \
+  --monitoring.metrics-prefixes "compute.googleapis.com/instance/cpu"
+  --monitoring.metrics-prefixes "compute.googleapis.com/instance/disk"
 ```
 
 ### Using filters
@@ -163,16 +164,17 @@ Example: \
    pubsub.googleapis.com/subscription/num_undelivered_messages (apply to only the specific subscription metric) \
 
 The `filter_query` will be applied to a final metrics API query when querying for metric data. You can read more about the metric API filter options in GCPs documentation https://cloud.google.com/monitoring/api/v3/filters
- 
+
 The final query sent to the metrics API already includes filters for project and metric type. Each applicable `filter_query` will be appended to the query with an AND
 
 Full example
 ```
 stackdriver_exporter \
- --google.project-id=my-test-project \
- --monitoring.metrics-type-prefixes='pubsub.googleapis.com/subscription,compute.googleapis.com/instance/cpu' \
+ --google.project-ids=my-test-project \
+ --monitoring.metrics-prefixes='pubsub.googleapis.com/subscription' \
+ --monitoring.metrics-prefixes='compute.googleapis.com/instance/cpu' \
  --monitoring.filters='pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match("us-west4.*my-team-subs.*")' \
- --monitoring.filters='compute.googleapis.com/instance/cpu:resource.labels.instance=monitoring.regex.full_match("us-west4.*my-team-subs.*")' 
+ --monitoring.filters='compute.googleapis.com/instance/cpu:resource.labels.instance=monitoring.regex.full_match("us-west4.*my-team-subs.*")'
 ```
 
 Using projects filter:

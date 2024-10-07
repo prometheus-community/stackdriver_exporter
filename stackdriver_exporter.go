@@ -58,8 +58,12 @@ var (
 	).Default("/metrics").String()
 
 	projectID = kingpin.Flag(
-		"google.project-id", "Comma seperated list of Google Project IDs.",
+		"google.project-id", "DEPRECATED - Comma seperated list of Google Project IDs. Use 'google.project-ids' instead.",
 	).String()
+
+	projectIDs = kingpin.Flag(
+		"google.project-ids", "Repeatable flag of Google Project IDs",
+	).Strings()
 
 	projectsFilter = kingpin.Flag(
 		"google.projects.filter", "Google projects search filter.",
@@ -86,10 +90,13 @@ var (
 	).Default("503").Ints()
 
 	// Monitoring collector flags
-
 	monitoringMetricsTypePrefixes = kingpin.Flag(
-		"monitoring.metrics-type-prefixes", "Comma separated Google Stackdriver Monitoring Metric Type prefixes.",
-	).Required().String()
+		"monitoring.metrics-type-prefixes", "DEPRECATED - Comma separated Google Stackdriver Monitoring Metric Type prefixes. Use 'monitoring.metrics-prefixes' instead.",
+	).String()
+
+	monitoringMetricsPrefixes = kingpin.Flag(
+		"monitoring.metrics-prefixes", "Google Stackdriver Monitoring Metric Type prefixes. Repeat this flag to scrape multiple prefixes.",
+	).Strings()
 
 	monitoringMetricsInterval = kingpin.Flag(
 		"monitoring.metrics-interval", "Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used.",
@@ -269,16 +276,29 @@ func main() {
 	kingpin.Parse()
 
 	logger := promlog.New(promlogConfig)
+	if *projectID != "" {
+		level.Warn(logger).Log("msg", "The google.project-id flag is deprecated and will be replaced by google.project-ids.")
+	}
+	if *monitoringMetricsTypePrefixes != "" {
+		level.Warn(logger).Log("msg", "The monitoring.metrics-type-prefixes flag is deprecated and will be replaced by monitoring.metrics-prefix.")
+	}
+	if *monitoringMetricsTypePrefixes == "" && len(*monitoringMetricsPrefixes) == 0 {
+		level.Error(logger).Log("msg", "At least one GCP monitoring prefix is required.")
+		os.Exit(1)
+	}
 
 	ctx := context.Background()
-	if *projectID == "" && *projectsFilter == "" {
-		level.Info(logger).Log("msg", "Neither projectID nor projectsFilter was provided. Trying to discover it")
+	var discoveredProjectIDs []string
+
+	if len(*projectIDs) == 0 && *projectID == "" && *projectsFilter == "" {
+		level.Info(logger).Log("msg", "Neither projectIDs nor projectsFilter was provided. Trying to discover it")
 		var err error
-		projectID, err = getDefaultGCPProject(ctx)
+		defaultProject, err := getDefaultGCPProject(ctx)
 		if err != nil {
-			level.Error(logger).Log("msg", "no explicit projectID and error trying to discover default GCloud project", "err", err)
+			level.Error(logger).Log("msg", "no explicit projectIDs and error trying to discover default GCloud project", "err", err)
 			os.Exit(1)
 		}
+		discoveredProjectIDs = append(discoveredProjectIDs, *defaultProject)
 	}
 
 	monitoringService, err := createMonitoringService(ctx)
@@ -287,43 +307,54 @@ func main() {
 		os.Exit(1)
 	}
 
-	var projectIDs []string
-
 	if *projectsFilter != "" {
-		projectIDs, err = utils.GetProjectIDsFromFilter(ctx, *projectsFilter)
+		projectIDsFromFilter, err := utils.GetProjectIDsFromFilter(ctx, *projectsFilter)
 		if err != nil {
 			level.Error(logger).Log("msg", "failed to get project IDs from filter", "err", err)
 			os.Exit(1)
 		}
+		discoveredProjectIDs = append(discoveredProjectIDs, projectIDsFromFilter...)
 	}
 
+	if len(*projectIDs) > 0 {
+		discoveredProjectIDs = append(discoveredProjectIDs, *projectIDs...)
+	}
 	if *projectID != "" {
-		projectIDs = append(projectIDs, strings.Split(*projectID, ",")...)
+		discoveredProjectIDs = append(discoveredProjectIDs, strings.Split(*projectID, ",")...)
+	}
+
+	var metricsPrefixes []string
+	if len(*monitoringMetricsPrefixes) > 0 {
+		metricsPrefixes = append(metricsPrefixes, *monitoringMetricsPrefixes...)
+	}
+	if *monitoringMetricsTypePrefixes != "" {
+		metricsPrefixes = append(metricsPrefixes, strings.Split(*monitoringMetricsTypePrefixes, ",")...)
 	}
 
 	level.Info(logger).Log(
 		"msg", "Starting stackdriver_exporter",
 		"version", version.Info(),
 		"build_context", version.BuildContext(),
-		"projects", *projectID,
-		"metric_prefixes", *monitoringMetricsTypePrefixes,
+		"metric_prefixes", fmt.Sprintf("%v", metricsPrefixes),
 		"extra_filters", strings.Join(*monitoringMetricsExtraFilter, ","),
-		"projectIDs", fmt.Sprintf("%v", projectIDs),
+		"projectIDs", fmt.Sprintf("%v", discoveredProjectIDs),
 		"projectsFilter", *projectsFilter,
 	)
 
-	inputPrefixes := strings.Split(*monitoringMetricsTypePrefixes, ",")
-	metricsTypePrefixes := parseMetricTypePrefixes(inputPrefixes)
+	parsedMetricsPrefixes := parseMetricTypePrefixes(metricsPrefixes)
 	metricExtraFilters := parseMetricExtraFilters()
+	// drop duplicate projects
+	slices.Sort(discoveredProjectIDs)
+	uniqueProjectIds := slices.Compact(discoveredProjectIDs)
 
 	if *metricsPath == *stackdriverMetricsPath {
 		handler := newHandler(
-			projectIDs, metricsTypePrefixes, metricExtraFilters, monitoringService, logger, prometheus.DefaultGatherer)
+			uniqueProjectIds, parsedMetricsPrefixes, metricExtraFilters, monitoringService, logger, prometheus.DefaultGatherer)
 		http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 	} else {
 		level.Info(logger).Log("msg", "Serving Stackdriver metrics at separate path", "path", *stackdriverMetricsPath)
 		handler := newHandler(
-			projectIDs, metricsTypePrefixes, metricExtraFilters, monitoringService, logger, nil)
+			uniqueProjectIds, parsedMetricsPrefixes, metricExtraFilters, monitoringService, logger, nil)
 		http.Handle(*stackdriverMetricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 		http.Handle(*metricsPath, promhttp.Handler())
 	}
