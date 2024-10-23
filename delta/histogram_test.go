@@ -18,7 +18,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promslog"
 	"google.golang.org/api/monitoring/v3"
 
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
@@ -33,7 +33,7 @@ var _ = Describe("HistogramStore", func() {
 	bucketValue := uint64(1000)
 
 	BeforeEach(func() {
-		store = delta.NewInMemoryHistogramStore(promlog.New(&promlog.Config{}), time.Minute)
+		store = delta.NewInMemoryHistogramStore(promslog.New(&promslog.Config{}), time.Minute)
 		histogram = &collectors.HistogramMetric{
 			FqName:         "histogram_name",
 			LabelKeys:      []string{"labelKey"},

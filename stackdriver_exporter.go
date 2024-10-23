@@ -15,7 +15,7 @@ package main
 
 import (
 	"fmt"
-	stdlog "log"
+	"log/slog"
 	"net/http"
 	"os"
 	"slices"
@@ -23,13 +23,11 @@ import (
 
 	"github.com/PuerkitoBio/rehttp"
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/promlog"
-	"github.com/prometheus/common/promlog/flag"
+	"github.com/prometheus/common/promslog"
+	"github.com/prometheus/common/promslog/flag"
 	"github.com/prometheus/common/version"
 	"github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
@@ -180,7 +178,7 @@ func createMonitoringService(ctx context.Context) (*monitoring.Service, error) {
 
 type handler struct {
 	handler http.Handler
-	logger  log.Logger
+	logger  *slog.Logger
 
 	projectIDs          []string
 	metricsPrefixes     []string
@@ -204,7 +202,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters []collectors.MetricFilter, m *monitoring.Service, logger log.Logger, additionalGatherer prometheus.Gatherer) *handler {
+func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters []collectors.MetricFilter, m *monitoring.Service, logger *slog.Logger, additionalGatherer prometheus.Gatherer) *handler {
 	h := &handler{
 		logger:              logger,
 		projectIDs:          projectIDs,
@@ -235,7 +233,7 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 			DescriptorCacheOnlyGoogle: *monitoringDescriptorCacheOnlyGoogle,
 		}, h.logger, delta.NewInMemoryCounterStore(h.logger, *monitoringMetricsDeltasTTL), delta.NewInMemoryHistogramStore(h.logger, *monitoringMetricsDeltasTTL))
 		if err != nil {
-			level.Error(h.logger).Log("err", err)
+			h.logger.Error("error creating monitoring collector", "err", err)
 			os.Exit(1)
 		}
 		registry.MustRegister(monitoringCollector)
@@ -247,7 +245,7 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 			registry,
 		}
 	}
-	opts := promhttp.HandlerOpts{ErrorLog: stdlog.New(log.NewStdlibAdapter(level.Error(h.logger)), "", 0)}
+	opts := promhttp.HandlerOpts{ErrorLog: slog.NewLogLogger(h.logger.Handler(), slog.LevelError)}
 	// Delegate http serving to Prometheus client library, which will call collector.Collect.
 	return promhttp.HandlerFor(gatherers, opts)
 }
@@ -268,22 +266,22 @@ func (h *handler) filterMetricTypePrefixes(filters map[string]bool) []string {
 }
 
 func main() {
-	promlogConfig := &promlog.Config{}
-	flag.AddFlags(kingpin.CommandLine, promlogConfig)
+	promslogConfig := &promslog.Config{}
+	flag.AddFlags(kingpin.CommandLine, promslogConfig)
 
 	kingpin.Version(version.Print("stackdriver_exporter"))
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
-	logger := promlog.New(promlogConfig)
+	logger := promslog.New(promslogConfig)
 	if *projectID != "" {
-		level.Warn(logger).Log("msg", "The google.project-id flag is deprecated and will be replaced by google.project-ids.")
+		logger.Warn("The google.project-id flag is deprecated and will be replaced by google.project-ids.")
 	}
 	if *monitoringMetricsTypePrefixes != "" {
-		level.Warn(logger).Log("msg", "The monitoring.metrics-type-prefixes flag is deprecated and will be replaced by monitoring.metrics-prefix.")
+		logger.Warn("The monitoring.metrics-type-prefixes flag is deprecated and will be replaced by monitoring.metrics-prefix.")
 	}
 	if *monitoringMetricsTypePrefixes == "" && len(*monitoringMetricsPrefixes) == 0 {
-		level.Error(logger).Log("msg", "At least one GCP monitoring prefix is required.")
+		logger.Error("At least one GCP monitoring prefix is required.")
 		os.Exit(1)
 	}
 
@@ -291,11 +289,11 @@ func main() {
 	var discoveredProjectIDs []string
 
 	if len(*projectIDs) == 0 && *projectID == "" && *projectsFilter == "" {
-		level.Info(logger).Log("msg", "Neither projectIDs nor projectsFilter was provided. Trying to discover it")
+		logger.Info("Neither projectIDs nor projectsFilter was provided. Trying to discover it")
 		var err error
 		defaultProject, err := getDefaultGCPProject(ctx)
 		if err != nil {
-			level.Error(logger).Log("msg", "no explicit projectIDs and error trying to discover default GCloud project", "err", err)
+			logger.Error("no explicit projectIDs and error trying to discover default GCloud project", "err", err)
 			os.Exit(1)
 		}
 		discoveredProjectIDs = append(discoveredProjectIDs, *defaultProject)
@@ -303,14 +301,14 @@ func main() {
 
 	monitoringService, err := createMonitoringService(ctx)
 	if err != nil {
-		level.Error(logger).Log("msg", "failed to create monitoring service", "err", err)
+		logger.Error("failed to create monitoring service", "err", err)
 		os.Exit(1)
 	}
 
 	if *projectsFilter != "" {
 		projectIDsFromFilter, err := utils.GetProjectIDsFromFilter(ctx, *projectsFilter)
 		if err != nil {
-			level.Error(logger).Log("msg", "failed to get project IDs from filter", "err", err)
+			logger.Error("failed to get project IDs from filter", "err", err)
 			os.Exit(1)
 		}
 		discoveredProjectIDs = append(discoveredProjectIDs, projectIDsFromFilter...)
@@ -331,8 +329,8 @@ func main() {
 		metricsPrefixes = append(metricsPrefixes, strings.Split(*monitoringMetricsTypePrefixes, ",")...)
 	}
 
-	level.Info(logger).Log(
-		"msg", "Starting stackdriver_exporter",
+	logger.Info(
+		"Starting stackdriver_exporter",
 		"version", version.Info(),
 		"build_context", version.BuildContext(),
 		"metric_prefixes", fmt.Sprintf("%v", metricsPrefixes),
@@ -352,7 +350,7 @@ func main() {
 			uniqueProjectIds, parsedMetricsPrefixes, metricExtraFilters, monitoringService, logger, prometheus.DefaultGatherer)
 		http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 	} else {
-		level.Info(logger).Log("msg", "Serving Stackdriver metrics at separate path", "path", *stackdriverMetricsPath)
+		logger.Info("Serving Stackdriver metrics at separate path", "path", *stackdriverMetricsPath)
 		handler := newHandler(
 			uniqueProjectIds, parsedMetricsPrefixes, metricExtraFilters, monitoringService, logger, nil)
 		http.Handle(*stackdriverMetricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
@@ -381,7 +379,7 @@ func main() {
 		}
 		landingPage, err := web.NewLandingPage(landingConfig)
 		if err != nil {
-			level.Error(logger).Log("err", err)
+			logger.Error("error creating landing page", "err", err)
 			os.Exit(1)
 		}
 		http.Handle("/", landingPage)
@@ -389,7 +387,7 @@ func main() {
 
 	srv := &http.Server{}
 	if err := web.ListenAndServe(srv, toolkitFlags, logger); err != nil {
-		level.Error(logger).Log("msg", "Error starting server", "err", err)
+		logger.Error("Error starting server", "err", err)
 		os.Exit(1)
 	}
 }
