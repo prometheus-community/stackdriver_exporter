@@ -16,13 +16,12 @@ package collectors
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
 	"google.golang.org/api/monitoring/v3"
@@ -53,7 +52,7 @@ type MonitoringCollector struct {
 	lastScrapeDurationSecondsMetric prometheus.Gauge
 	collectorFillMissingLabels      bool
 	monitoringDropDelegatedProjects bool
-	logger                          log.Logger
+	logger                          *slog.Logger
 	counterStore                    DeltaCounterStore
 	histogramStore                  DeltaHistogramStore
 	aggregateDeltas                 bool
@@ -120,10 +119,10 @@ type DeltaHistogramStore interface {
 	ListMetrics(metricDescriptorName string) []*HistogramMetric
 }
 
-func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger log.Logger, counterStore DeltaCounterStore, histogramStore DeltaHistogramStore) (*MonitoringCollector, error) {
+func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger *slog.Logger, counterStore DeltaCounterStore, histogramStore DeltaHistogramStore) (*MonitoringCollector, error) {
 	const subsystem = "monitoring"
 
-	logger = log.With(logger, "project_id", projectID)
+	logger = logger.With("project_id", projectID)
 
 	apiCallsTotalMetric := prometheus.NewCounter(
 		prometheus.CounterOpts{
@@ -237,7 +236,7 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 	if err := c.reportMonitoringMetrics(ch, begun); err != nil {
 		errorMetric = float64(1)
 		c.scrapeErrorsTotalMetric.Inc()
-		level.Error(c.logger).Log("msg", "Error while getting Google Stackdriver Monitoring metrics", "err", err)
+		c.logger.Error("Error while getting Google Stackdriver Monitoring metrics", "err", err)
 	}
 	c.scrapeErrorsTotalMetric.Collect(ch)
 
@@ -283,7 +282,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 			wg.Add(1)
 			go func(metricDescriptor *monitoring.MetricDescriptor, ch chan<- prometheus.Metric, startTime, endTime time.Time) {
 				defer wg.Done()
-				level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics for descriptor", "descriptor", metricDescriptor.Type)
+				c.logger.Debug("retrieving Google Stackdriver Monitoring metrics for descriptor", "descriptor", metricDescriptor.Type)
 				filter := fmt.Sprintf("metric.type=\"%s\"", metricDescriptor.Type)
 				if c.monitoringDropDelegatedProjects {
 					filter = fmt.Sprintf(
@@ -298,11 +297,11 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					ingestDelay := metricDescriptor.Metadata.IngestDelay
 					ingestDelayDuration, err := time.ParseDuration(ingestDelay)
 					if err != nil {
-						level.Error(c.logger).Log("msg", "error parsing ingest delay from metric metadata", "descriptor", metricDescriptor.Type, "err", err, "delay", ingestDelay)
+						c.logger.Error("error parsing ingest delay from metric metadata", "descriptor", metricDescriptor.Type, "err", err, "delay", ingestDelay)
 						errChannel <- err
 						return
 					}
-					level.Debug(c.logger).Log("msg", "adding ingest delay", "descriptor", metricDescriptor.Type, "delay", ingestDelay)
+					c.logger.Debug("adding ingest delay", "descriptor", metricDescriptor.Type, "delay", ingestDelay)
 					endTime = endTime.Add(ingestDelayDuration * -1)
 					startTime = startTime.Add(ingestDelayDuration * -1)
 				}
@@ -313,7 +312,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					}
 				}
 
-				level.Debug(c.logger).Log("msg", "retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
+				c.logger.Debug("retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
 
 				timeSeriesListCall := c.monitoringService.Projects.TimeSeries.List(utils.ProjectResource(c.projectID)).
 					Filter(filter).
@@ -324,7 +323,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					c.apiCallsTotalMetric.Inc()
 					page, err := timeSeriesListCall.Do()
 					if err != nil {
-						level.Error(c.logger).Log("msg", "error retrieving Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
+						c.logger.Error("error retrieving Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
 						errChannel <- err
 						break
 					}
@@ -332,7 +331,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 						break
 					}
 					if err := c.reportTimeSeriesMetrics(page, metricDescriptor, ch, begun); err != nil {
-						level.Error(c.logger).Log("msg", "error reporting Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
+						c.logger.Error("error reporting Time Series metrics for descriptor", "descriptor", metricDescriptor.Type, "err", err)
 						errChannel <- err
 						break
 					}
@@ -368,7 +367,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 			}
 
 			if cached := c.descriptorCache.Lookup(metricsTypePrefix); cached != nil {
-				level.Debug(c.logger).Log("msg", "using cached Google Stackdriver Monitoring metric descriptors starting with", "prefix", metricsTypePrefix)
+				c.logger.Debug("using cached Google Stackdriver Monitoring metric descriptors starting with", "prefix", metricsTypePrefix)
 				if err := metricDescriptorsFunction(cached); err != nil {
 					errChannel <- err
 				}
@@ -381,7 +380,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					return metricDescriptorsFunction(r.MetricDescriptors)
 				}
 
-				level.Debug(c.logger).Log("msg", "listing Google Stackdriver Monitoring metric descriptors starting with", "prefix", metricsTypePrefix)
+				c.logger.Debug("listing Google Stackdriver Monitoring metric descriptors starting with", "prefix", metricsTypePrefix)
 				if err := c.monitoringService.Projects.MetricDescriptors.List(utils.ProjectResource(c.projectID)).
 					Filter(filter).
 					Pages(ctx, callback); err != nil {
@@ -396,7 +395,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 	wg.Wait()
 	close(errChannel)
 
-	level.Debug(c.logger).Log("msg", "Done reporting monitoring metrics")
+	c.logger.Debug("Done reporting monitoring metrics")
 	return <-errChannel
 }
 
@@ -500,12 +499,12 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			if err == nil {
 				timeSeriesMetrics.CollectNewConstHistogram(timeSeries, newestEndTime, labelKeys, dist, buckets, labelValues, timeSeries.MetricKind)
 			} else {
-				level.Debug(c.logger).Log("msg", "discarding", "resource", timeSeries.Resource.Type, "metric",
+				c.logger.Debug("discarding", "resource", timeSeries.Resource.Type, "metric",
 					timeSeries.Metric.Type, "err", err)
 			}
 			continue
 		default:
-			level.Debug(c.logger).Log("msg", "discarding", "value_type", timeSeries.ValueType, "metric", timeSeries)
+			c.logger.Debug("discarding", "value_type", timeSeries.ValueType, "metric", timeSeries)
 			continue
 		}
 
@@ -569,7 +568,7 @@ func (c *MonitoringCollector) generateHistogramBuckets(
 func (c *MonitoringCollector) keyExists(labelKeys []string, key string) bool {
 	for _, item := range labelKeys {
 		if item == key {
-			level.Debug(c.logger).Log("msg", "Found duplicate label key", "key", key)
+			c.logger.Debug("Found duplicate label key", "key", key)
 			return true
 		}
 	}

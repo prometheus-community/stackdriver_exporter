@@ -18,7 +18,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promslog"
 	"google.golang.org/api/monitoring/v3"
 
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
@@ -31,7 +31,7 @@ var _ = Describe("Counter", func() {
 	descriptor := &monitoring.MetricDescriptor{Name: "This is a metric"}
 
 	BeforeEach(func() {
-		store = delta.NewInMemoryCounterStore(promlog.New(&promlog.Config{}), time.Minute)
+		store = delta.NewInMemoryCounterStore(promslog.New(&promslog.Config{}), time.Minute)
 		metric = &collectors.ConstMetric{
 			FqName:         "counter_name",
 			LabelKeys:      []string{"labelKey"},

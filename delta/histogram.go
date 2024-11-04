@@ -15,13 +15,12 @@ package delta
 
 import (
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"google.golang.org/api/monitoring/v3"
 
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
@@ -36,11 +35,11 @@ type HistogramEntry struct {
 type InMemoryHistogramStore struct {
 	store  *sync.Map
 	ttl    time.Duration
-	logger log.Logger
+	logger *slog.Logger
 }
 
 // NewInMemoryHistogramStore returns an implementation of HistogramStore which is persisted in-memory
-func NewInMemoryHistogramStore(logger log.Logger, ttl time.Duration) *InMemoryHistogramStore {
+func NewInMemoryHistogramStore(logger *slog.Logger, ttl time.Duration) *InMemoryHistogramStore {
 	store := &InMemoryHistogramStore{
 		store:  &sync.Map{},
 		logger: logger,
@@ -68,20 +67,20 @@ func (s *InMemoryHistogramStore) Increment(metricDescriptor *monitoring.MetricDe
 	existing := entry.Collected[key]
 
 	if existing == nil {
-		level.Debug(s.logger).Log("msg", "Tracking new histogram", "fqName", currentValue.FqName, "key", key, "incoming_time", currentValue.ReportTime)
+		s.logger.Debug("Tracking new histogram", "fqName", currentValue.FqName, "key", key, "incoming_time", currentValue.ReportTime)
 		entry.Collected[key] = currentValue
 		return
 	}
 
 	if existing.ReportTime.Before(currentValue.ReportTime) {
-		level.Debug(s.logger).Log("msg", "Incrementing existing histogram", "fqName", currentValue.FqName, "key", key, "last_reported_time", existing.ReportTime, "incoming_time", currentValue.ReportTime)
+		s.logger.Debug("Incrementing existing histogram", "fqName", currentValue.FqName, "key", key, "last_reported_time", existing.ReportTime, "incoming_time", currentValue.ReportTime)
 		currentValue.MergeHistogram(existing)
 		// Replace the existing histogram by the new one after merging it.
 		entry.Collected[key] = currentValue
 		return
 	}
 
-	level.Debug(s.logger).Log("msg", "Ignoring old sample for histogram", "fqName", currentValue.FqName, "key", key, "last_reported_time", existing.ReportTime, "incoming_time", currentValue.ReportTime)
+	s.logger.Debug("Ignoring old sample for histogram", "fqName", currentValue.FqName, "key", key, "last_reported_time", existing.ReportTime, "incoming_time", currentValue.ReportTime)
 }
 
 func toHistogramKey(hist *collectors.HistogramMetric) uint64 {
@@ -119,7 +118,7 @@ func (s *InMemoryHistogramStore) ListMetrics(metricDescriptorName string) []*col
 	for key, collected := range entry.Collected {
 		// Scan and remove metrics which are outside the TTL
 		if ttlWindowStart.After(collected.CollectionTime) {
-			level.Debug(s.logger).Log("msg", "Deleting histogram entry outside of TTL", "key", key, "fqName", collected.FqName)
+			s.logger.Debug("Deleting histogram entry outside of TTL", "key", key, "fqName", collected.FqName)
 			delete(entry.Collected, key)
 			continue
 		}
