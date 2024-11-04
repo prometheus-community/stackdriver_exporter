@@ -10,7 +10,7 @@ require (
 	github.com/onsi/gomega v1.34.1
 	github.com/prometheus/client_golang v1.20.5
 	github.com/prometheus/common v0.60.1
-	github.com/prometheus/exporter-toolkit v0.13.0
+	github.com/prometheus/exporter-toolkit v0.13.1
 	golang.org/x/net v0.30.0
 	golang.org/x/oauth2 v0.23.0
 	google.golang.org/api v0.204.0
