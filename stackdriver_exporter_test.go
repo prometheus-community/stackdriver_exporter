@@ -35,3 +35,29 @@ func TestParseMetricTypePrefixes(t *testing.T) {
 		t.Errorf("Metric type prefix sanitization did not produce expected output. Expected:\n%s\nGot:\n%s", expectedOutputPrefixes, outputPrefixes)
 	}
 }
+
+func TestFilterMetricTypePrefixes(t *testing.T) {
+	metricPrefixes := []string{
+		"redis.googleapis.com/stats/",
+	}
+
+	h := &handler{
+		metricsPrefixes: metricPrefixes,
+	}
+
+	inputFilters := map[string]bool{
+		"redis.googleapis.com/stats/memory/usage":       true,
+		"redis.googleapis.com/stats/memory/usage_ratio": true,
+		"redis.googleapis.com":                          true,
+	}
+
+	expectedOutputPrefixes := []string{
+		"redis.googleapis.com/stats/memory/usage",
+	}
+
+	outputPrefixes := h.filterMetricTypePrefixes(inputFilters)
+
+	if !reflect.DeepEqual(outputPrefixes, expectedOutputPrefixes) {
+		t.Errorf("filterMetricTypePrefixes did not produce expected output. Expected:\n%s\nGot:\n%s", expectedOutputPrefixes, outputPrefixes)
+	}
+}
