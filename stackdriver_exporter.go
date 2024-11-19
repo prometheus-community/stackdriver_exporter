@@ -20,6 +20,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/PuerkitoBio/rehttp"
 	"github.com/alecthomas/kingpin/v2"
@@ -185,6 +186,9 @@ type handler struct {
 	metricsExtraFilters []collectors.MetricFilter
 	additionalGatherer  prometheus.Gatherer
 	m                   *monitoring.Service
+
+	mu         sync.RWMutex
+	collectors map[string]*collectors.MonitoringCollector
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -210,28 +214,46 @@ func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters
 		metricsExtraFilters: metricExtraFilters,
 		additionalGatherer:  additionalGatherer,
 		m:                   m,
+		collectors:          map[string]*collectors.MonitoringCollector{},
 	}
 
 	h.handler = h.innerHandler(nil)
 	return h
 }
 
+func (h *handler) getCollector(project string, filters map[string]bool) (*collectors.MonitoringCollector, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	collectorKey := fmt.Sprintf("%s-%v", project, filters)
+	if c, ok := h.collectors[collectorKey]; ok {
+		return c, nil
+	}
+
+	collector, err := collectors.NewMonitoringCollector(project, h.m, collectors.MonitoringCollectorOptions{
+		MetricTypePrefixes:        h.filterMetricTypePrefixes(filters),
+		ExtraFilters:              h.metricsExtraFilters,
+		RequestInterval:           *monitoringMetricsInterval,
+		RequestOffset:             *monitoringMetricsOffset,
+		IngestDelay:               *monitoringMetricsIngestDelay,
+		FillMissingLabels:         *collectorFillMissingLabels,
+		DropDelegatedProjects:     *monitoringDropDelegatedProjects,
+		AggregateDeltas:           *monitoringMetricsAggregateDeltas,
+		DescriptorCacheTTL:        *monitoringDescriptorCacheTTL,
+		DescriptorCacheOnlyGoogle: *monitoringDescriptorCacheOnlyGoogle,
+	}, h.logger, delta.NewInMemoryCounterStore(h.logger, *monitoringMetricsDeltasTTL), delta.NewInMemoryHistogramStore(h.logger, *monitoringMetricsDeltasTTL))
+	if err != nil {
+		return nil, err
+	}
+	h.collectors[collectorKey] = collector
+	return collector, nil
+}
+
 func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 	registry := prometheus.NewRegistry()
 
 	for _, project := range h.projectIDs {
-		monitoringCollector, err := collectors.NewMonitoringCollector(project, h.m, collectors.MonitoringCollectorOptions{
-			MetricTypePrefixes:        h.filterMetricTypePrefixes(filters),
-			ExtraFilters:              h.metricsExtraFilters,
-			RequestInterval:           *monitoringMetricsInterval,
-			RequestOffset:             *monitoringMetricsOffset,
-			IngestDelay:               *monitoringMetricsIngestDelay,
-			FillMissingLabels:         *collectorFillMissingLabels,
-			DropDelegatedProjects:     *monitoringDropDelegatedProjects,
-			AggregateDeltas:           *monitoringMetricsAggregateDeltas,
-			DescriptorCacheTTL:        *monitoringDescriptorCacheTTL,
-			DescriptorCacheOnlyGoogle: *monitoringDescriptorCacheOnlyGoogle,
-		}, h.logger, delta.NewInMemoryCounterStore(h.logger, *monitoringMetricsDeltasTTL), delta.NewInMemoryHistogramStore(h.logger, *monitoringMetricsDeltasTTL))
+		monitoringCollector, err := h.getCollector(project, filters)
 		if err != nil {
 			h.logger.Error("error creating monitoring collector", "err", err)
 			os.Exit(1)
