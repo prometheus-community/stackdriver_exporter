@@ -257,12 +257,14 @@ func (h *handler) filterMetricTypePrefixes(filters map[string]bool) []string {
 	if len(filters) > 0 {
 		filteredPrefixes = nil
 		for _, prefix := range h.metricsPrefixes {
-			if filters[prefix] {
-				filteredPrefixes = append(filteredPrefixes, prefix)
+			for filter, _ := range filters {
+				if strings.HasPrefix(filter, prefix) {
+					filteredPrefixes = append(filteredPrefixes, filter)
+				}
 			}
 		}
 	}
-	return filteredPrefixes
+	return parseMetricTypePrefixes(filteredPrefixes)
 }
 
 func main() {
