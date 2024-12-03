@@ -72,3 +72,47 @@ func (d *descriptorCache) Store(prefix string, data []*monitoring.MetricDescript
 	defer d.lock.Unlock()
 	d.cache[prefix] = &entry
 }
+
+// collectorCache is a cache for MonitoringCollectors
+type CollectorCache struct {
+	cache map[string]*collectorCacheEntry
+	lock  sync.RWMutex
+	ttl   time.Duration
+}
+
+// collectorCacheEntry is a cache entry for a MonitoringCollector
+type collectorCacheEntry struct {
+	collector *MonitoringCollector
+	expiry    time.Time
+}
+
+// NewCollectorCache returns a new CollectorCache with the given TTL
+func NewCollectorCache(ttl time.Duration) *CollectorCache {
+	return &CollectorCache{
+		cache: make(map[string]*collectorCacheEntry),
+		ttl:   ttl,
+	}
+}
+
+// Get returns a MonitoringCollector if the key is found and not expired
+func (c *CollectorCache) Get(key string) (*MonitoringCollector, bool) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	entry, ok := c.cache[key]
+	if !ok || time.Now().After(entry.expiry) {
+		return nil, false
+	}
+	return entry.collector, true
+}
+
+func (c *CollectorCache) Store(key string, collector *MonitoringCollector) {
+	entry := &collectorCacheEntry{
+		collector: collector,
+		expiry:    time.Now().Add(c.ttl),
+	}
+
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.cache[key] = entry
+}

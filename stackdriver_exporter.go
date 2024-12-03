@@ -20,7 +20,7 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"sync"
+	"time"
 
 	"github.com/PuerkitoBio/rehttp"
 	"github.com/alecthomas/kingpin/v2"
@@ -186,9 +186,7 @@ type handler struct {
 	metricsExtraFilters []collectors.MetricFilter
 	additionalGatherer  prometheus.Gatherer
 	m                   *monitoring.Service
-
-	mu         sync.RWMutex
-	collectors map[string]*collectors.MonitoringCollector
+	collectors          *collectors.CollectorCache
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -207,6 +205,20 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters []collectors.MetricFilter, m *monitoring.Service, logger *slog.Logger, additionalGatherer prometheus.Gatherer) *handler {
+	ttl := 2 * time.Hour
+	// Add collector caching TTL as max of deltas aggregation or descriptor caching
+	if *monitoringMetricsAggregateDeltas || *monitoringDescriptorCacheTTL > 0 {
+		featureTTL := *monitoringMetricsDeltasTTL
+		if *monitoringDescriptorCacheTTL > featureTTL {
+			featureTTL = *monitoringDescriptorCacheTTL
+		}
+		if featureTTL > ttl {
+			ttl = featureTTL
+		}
+	}
+
+	logger.Info("Creating collector cache", "ttl", ttl)
+
 	h := &handler{
 		logger:              logger,
 		projectIDs:          projectIDs,
@@ -214,7 +226,7 @@ func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters
 		metricsExtraFilters: metricExtraFilters,
 		additionalGatherer:  additionalGatherer,
 		m:                   m,
-		collectors:          map[string]*collectors.MonitoringCollector{},
+		collectors:          collectors.NewCollectorCache(ttl),
 	}
 
 	h.handler = h.innerHandler(nil)
@@ -222,12 +234,11 @@ func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters
 }
 
 func (h *handler) getCollector(project string, filters map[string]bool) (*collectors.MonitoringCollector, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	filterdPrefixes := h.filterMetricTypePrefixes(filters)
+	collectorKey := fmt.Sprintf("%s-%v", project, filterdPrefixes)
 
-	collectorKey := fmt.Sprintf("%s-%v", project, filters)
-	if c, ok := h.collectors[collectorKey]; ok {
-		return c, nil
+	if collector, found := h.collectors.Get(collectorKey); found {
+		return collector, nil
 	}
 
 	collector, err := collectors.NewMonitoringCollector(project, h.m, collectors.MonitoringCollectorOptions{
@@ -245,7 +256,7 @@ func (h *handler) getCollector(project string, filters map[string]bool) (*collec
 	if err != nil {
 		return nil, err
 	}
-	h.collectors[collectorKey] = collector
+	h.collectors.Store(collectorKey, collector)
 	return collector, nil
 }
 
