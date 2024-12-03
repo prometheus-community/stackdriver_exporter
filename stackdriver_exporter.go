@@ -242,7 +242,7 @@ func (h *handler) getCollector(project string, filters map[string]bool) (*collec
 	}
 
 	collector, err := collectors.NewMonitoringCollector(project, h.m, collectors.MonitoringCollectorOptions{
-		MetricTypePrefixes:        h.filterMetricTypePrefixes(filters),
+		MetricTypePrefixes:        filterdPrefixes,
 		ExtraFilters:              h.metricsExtraFilters,
 		RequestInterval:           *monitoringMetricsInterval,
 		RequestOffset:             *monitoringMetricsOffset,
