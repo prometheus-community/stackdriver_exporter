@@ -72,3 +72,79 @@ func (d *descriptorCache) Store(prefix string, data []*monitoring.MetricDescript
 	defer d.lock.Unlock()
 	d.cache[prefix] = &entry
 }
+
+// collectorCache is a cache for MonitoringCollectors
+type CollectorCache struct {
+	cache map[string]*collectorCacheEntry
+	lock  sync.RWMutex
+	ttl   time.Duration
+}
+
+// collectorCacheEntry is a cache entry for a MonitoringCollector
+type collectorCacheEntry struct {
+	collector *MonitoringCollector
+	expiry    time.Time
+}
+
+// NewCollectorCache returns a new CollectorCache with the given TTL
+func NewCollectorCache(ttl time.Duration) *CollectorCache {
+	c := &CollectorCache{
+		cache: make(map[string]*collectorCacheEntry),
+		ttl:   ttl,
+	}
+
+	go c.cleanup()
+	return c
+}
+
+// Get returns a MonitoringCollector if the key is found and not expired
+// If key is found it resets the TTL for the collector
+func (c *CollectorCache) Get(key string) (*MonitoringCollector, bool) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	entry, ok := c.cache[key]
+
+	if !ok {
+		return nil, false
+	}
+
+	if time.Now().After(entry.expiry) {
+		delete(c.cache, key)
+		return nil, false
+	}
+
+	entry.expiry = time.Now().Add(c.ttl)
+	return entry.collector, true
+}
+
+func (c *CollectorCache) Store(key string, collector *MonitoringCollector) {
+	entry := &collectorCacheEntry{
+		collector: collector,
+		expiry:    time.Now().Add(c.ttl),
+	}
+
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.cache[key] = entry
+}
+
+func (c *CollectorCache) cleanup() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		c.removeExpired()
+	}
+}
+
+func (c *CollectorCache) removeExpired() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	now := time.Now()
+	for key, entry := range c.cache {
+		if now.After(entry.expiry) {
+			delete(c.cache, key)
+		}
+	}
+}
