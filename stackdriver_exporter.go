@@ -205,16 +205,15 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters []collectors.MetricFilter, m *monitoring.Service, logger *slog.Logger, additionalGatherer prometheus.Gatherer) *handler {
-	ttl := 2 * time.Hour
+	var ttl time.Duration
 	// Add collector caching TTL as max of deltas aggregation or descriptor caching
 	if *monitoringMetricsAggregateDeltas || *monitoringDescriptorCacheTTL > 0 {
-		featureTTL := *monitoringMetricsDeltasTTL
-		if *monitoringDescriptorCacheTTL > featureTTL {
-			featureTTL = *monitoringDescriptorCacheTTL
+		ttl = *monitoringMetricsDeltasTTL
+		if *monitoringDescriptorCacheTTL > ttl {
+			ttl = *monitoringDescriptorCacheTTL
 		}
-		if featureTTL > ttl {
-			ttl = featureTTL
-		}
+	} else {
+		ttl = 2 * time.Hour
 	}
 
 	logger.Info("Creating collector cache", "ttl", ttl)
