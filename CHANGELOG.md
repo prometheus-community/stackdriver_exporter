@@ -1,5 +1,10 @@
 ## master / unreleased
 
+## 0.18.0 / 2025-01-16
+
+- [FEATURE] Support more specific prefixes in ?collect parameter #387
+- [FEATURE] Enabling monitoring metrics, aggregate deltas, and descriptor cache with ?collect #389
+
 ## 0.17.0 / 2024-11-04
 
 Deprecation notice: The comma delimited flags `google.project-id` and `monitoring.metrics-type-prefixes` are being replaced by repeatable flags `google.project-ids` and `monitoring.metrics-prefixes`. The comma delimited flags will be supported for at least one more release. 
