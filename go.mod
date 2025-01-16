@@ -1,7 +1,6 @@
 module github.com/prometheus-community/stackdriver_exporter
 
-go 1.22
-toolchain go1.22.5
+go 1.22.0
 
 require (
 	github.com/PuerkitoBio/rehttp v1.4.0
