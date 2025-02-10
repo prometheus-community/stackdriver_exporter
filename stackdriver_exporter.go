@@ -137,6 +137,10 @@ var (
 	monitoringDescriptorCacheOnlyGoogle = kingpin.Flag(
 		"monitoring.descriptor-cache-only-google", "Only cache descriptors for *.googleapis.com metrics",
 	).Default("true").Bool()
+
+	promHttpErrorHandling = kingpin.Flag(
+		"promhttp.error-handling", "Defines how errors are handled by promhttp.Handler while serving metrics",
+	).Default("httpErrorOnError").Enum("httpErrorOnError", "continueOnError", "panicOnError")
 )
 
 func init() {
@@ -277,7 +281,10 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 			registry,
 		}
 	}
-	opts := promhttp.HandlerOpts{ErrorLog: slog.NewLogLogger(h.logger.Handler(), slog.LevelError)}
+	opts := promhttp.HandlerOpts{
+		ErrorLog:      slog.NewLogLogger(h.logger.Handler(), slog.LevelError),
+		ErrorHandling: getPromHttpErrorHandlingOpt(*promHttpErrorHandling),
+	}
 	// Delegate http serving to Prometheus client library, which will call collector.Collect.
 	return promhttp.HandlerFor(gatherers, opts)
 }
@@ -463,4 +470,14 @@ func parseMetricExtraFilters() []collectors.MetricFilter {
 		}
 	}
 	return extraFilters
+}
+
+func getPromHttpErrorHandlingOpt(flagOpt string) promhttp.HandlerErrorHandling {
+	if flagOpt == "continueOnError" {
+		return promhttp.ContinueOnError
+	}
+	if flagOpt == "panicOnError" {
+		return promhttp.PanicOnError
+	}
+	return promhttp.HTTPErrorOnError
 }
