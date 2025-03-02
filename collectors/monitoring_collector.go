@@ -452,7 +452,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 				labelValues = append(labelValues, value)
 			}
 		}
-		
+
 		// Add system metadata labels
 		// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TimeSeries
 		if timeSeries.Metadata.SystemLabels != nil {
