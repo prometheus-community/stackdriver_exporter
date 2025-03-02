@@ -480,7 +480,6 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			}
 		}
 
-
 		if c.monitoringDropDelegatedProjects {
 			dropDelegatedProject := false
 
