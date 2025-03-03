@@ -455,7 +455,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 
 		// Add system metadata labels
 		// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TimeSeries
-		if timeSeries.Metadata.SystemLabels != nil {
+		if timeSeries.Metadata != nil && timeSeries.Metadata.SystemLabels != nil {
 			// Marshal the SystemLabels struct to JSON
 			jsonBytes, err := json.Marshal(timeSeries.Metadata.SystemLabels)
 			if err != nil {
