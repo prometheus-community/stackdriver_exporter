@@ -1,6 +1,6 @@
 module github.com/prometheus-community/stackdriver_exporter
 
-go 1.22.0
+go 1.23.0
 
 require (
 	github.com/PuerkitoBio/rehttp v1.4.0
@@ -8,11 +8,11 @@ require (
 	github.com/fatih/camelcase v1.0.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.36.2
-	github.com/prometheus/client_golang v1.20.5
-	github.com/prometheus/common v0.61.0
+	github.com/prometheus/client_golang v1.21.1
+	github.com/prometheus/common v0.62.0
 	github.com/prometheus/exporter-toolkit v0.13.2
-	golang.org/x/net v0.34.0
-	golang.org/x/oauth2 v0.25.0
+	golang.org/x/net v0.37.0
+	golang.org/x/oauth2 v0.28.0
 	google.golang.org/api v0.217.0
 )
 
@@ -34,7 +34,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
-	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/mdlayher/socket v0.4.1 // indirect
 	github.com/mdlayher/vsock v1.2.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -47,10 +47,10 @@ require (
 	go.opentelemetry.io/otel v1.31.0 // indirect
 	go.opentelemetry.io/otel/metric v1.31.0 // indirect
 	go.opentelemetry.io/otel/trace v1.31.0 // indirect
-	golang.org/x/crypto v0.32.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
+	golang.org/x/sync v0.12.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250106144421-5f5ef82da422 // indirect
 	google.golang.org/grpc v1.69.4 // indirect
 	google.golang.org/protobuf v1.36.2 // indirect
