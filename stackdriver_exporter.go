@@ -68,6 +68,10 @@ var (
 		"google.projects.filter", "Google projects search filter.",
 	).String()
 
+	googleUniverseDomain = kingpin.Flag(
+		"google.universe-domain", "The Cloud universe to use.",
+	).Default("googleapis.com").String()
+
 	stackdriverMaxRetries = kingpin.Flag(
 		"stackdriver.max-retries", "Max number of retries that should be attempted on 503 errors from stackdriver.",
 	).Default("0").Int()
@@ -169,7 +173,7 @@ func createMonitoringService(ctx context.Context) (*monitoring.Service, error) {
 		rehttp.ExpJitterDelay(*stackdriverBackoffJitterBase, *stackdriverMaxBackoffDuration), // Set timeout to <10s as that is prom default timeout
 	)
 
-	monitoringService, err := monitoring.NewService(ctx, option.WithHTTPClient(googleClient))
+	monitoringService, err := monitoring.NewService(ctx, option.WithHTTPClient(googleClient), option.WithUniverseDomain(*googleUniverseDomain))
 	if err != nil {
 		return nil, fmt.Errorf("Error creating Google Stackdriver Monitoring service: %v", err)
 	}
