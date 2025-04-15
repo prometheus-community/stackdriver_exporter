@@ -1,5 +1,7 @@
 ## master / unreleased
 
+- [FEATURE] Add `google.universe-domain` flag to specify the Google Cloud universe to use.
+
 ## 0.18.0 / 2025-01-16
 
 - [FEATURE] Support more specific prefixes in ?collect parameter #387
