@@ -42,11 +42,11 @@ func NormalizeMetricName(metricName string) string {
 }
 
 func SplitExtraFilter(extraFilter string, separator string) (string, string) {
-	mPrefix := strings.Split(extraFilter, separator)
-	if mPrefix[0] == extraFilter {
+	mPrefix := strings.SplitN(extraFilter, separator, 2)
+	if len(mPrefix) != 2 {
 		return "", ""
 	}
-	return mPrefix[0], strings.Join(mPrefix[1:], "")
+	return mPrefix[0], mPrefix[1]
 }
 
 func ProjectResource(projectID string) string {
