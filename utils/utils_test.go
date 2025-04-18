@@ -31,3 +31,23 @@ var _ = Describe("ProjectResource", func() {
 		Expect(ProjectResource("fake-project-1")).To(Equal("projects/fake-project-1"))
 	})
 })
+
+var _ = Describe("SplitExtraFilter", func() {
+	It("returns an empty string from incomplete filter", func() {
+		metricPrefix, filterQuery := SplitExtraFilter("This_is__a-MetricName.Example/with/no/filter", ":")
+		Expect(metricPrefix).To(Equal(""))
+		Expect(filterQuery).To(Equal(""))
+	})
+
+	It("returns a metric prefix and filter query from basic filter", func() {
+		metricPrefix, filterQuery := SplitExtraFilter("This_is__a-MetricName.Example/with:filter.name=filter_value", ":")
+		Expect(metricPrefix).To(Equal("This_is__a-MetricName.Example/with"))
+		Expect(filterQuery).To(Equal("filter.name=filter_value"))
+	})
+
+	It("returns a metric prefix and filter query filter with colon", func() {
+		metricPrefix, filterQuery := SplitExtraFilter(`This_is__a-MetricName.Example/with:filter.name="filter:value"`, ":")
+		Expect(metricPrefix).To(Equal("This_is__a-MetricName.Example/with"))
+		Expect(filterQuery).To(Equal("filter.name=\"filter:value\""))
+	})
+})
