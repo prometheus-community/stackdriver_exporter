@@ -165,7 +165,7 @@ Example: \
 
 The `filter_query` will be applied to a final metrics API query when querying for metric data. You can read more about the metric API filter options in GCPs documentation https://cloud.google.com/monitoring/api/v3/filters
 
-The final query sent to the metrics API already includes filters for project and metric type. Each applicable `filter_query` will be appended to the query with an AND
+The final query sent to the metrics API already includes filters for project and metric type. Each applicable `filter_query` will be appended to the query with an `AND`. String filter values that contain special characters (e.g. `:` colon) must be quoted with quotation marks `"`. Please always check logs for potential syntax errors from GCP.
 
 Full example
 ```
@@ -173,8 +173,10 @@ stackdriver_exporter \
  --google.project-ids=my-test-project \
  --monitoring.metrics-prefixes='pubsub.googleapis.com/subscription' \
  --monitoring.metrics-prefixes='compute.googleapis.com/instance/cpu' \
+ --monitoring.metrics-prefixes='cloudsql.googleapis.com/database' \
  --monitoring.filters='pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match("us-west4.*my-team-subs.*")' \
- --monitoring.filters='compute.googleapis.com/instance/cpu:resource.labels.instance=monitoring.regex.full_match("us-west4.*my-team-subs.*")'
+ --monitoring.filters='compute.googleapis.com/instance/cpu:resource.labels.instance=monitoring.regex.full_match("us-west4.*my-team-subs.*")' \
+ --monitoring.filters='cloudsql.googleapis.com/database:resource.labels.database_id="my-test-project:my-database-name"'
 ```
 
 Using projects filter:
