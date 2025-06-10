@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -399,6 +400,28 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 	return <-errChannel
 }
 
+func (c *MonitoringCollector) filterDuplicateTimeSeries(
+	timeSeries []*monitoring.TimeSeries,
+) []*monitoring.TimeSeries {
+	var keptTimeSeries []*monitoring.TimeSeries
+
+	for _, timeSerie := range timeSeries {
+		var skip = false
+
+		for _, keptTimeSerie := range keptTimeSeries {
+			// Did we already find a timeSerie with the exact same key-value labels?
+			if reflect.DeepEqual(timeSerie.Metric.Labels, keptTimeSerie.Metric.Labels) {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			keptTimeSeries = append(keptTimeSeries, timeSerie)
+		}
+	}
+	return keptTimeSeries
+}
+
 func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	page *monitoring.ListTimeSeriesResponse,
 	metricDescriptor *monitoring.MetricDescriptor,
@@ -408,6 +431,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	var metricValue float64
 	var metricValueType prometheus.ValueType
 	var newestTSPoint *monitoring.Point
+	var uniqueTimeSeries []*monitoring.TimeSeries
 
 	timeSeriesMetrics, err := newTimeSeriesMetrics(metricDescriptor,
 		ch,
@@ -419,7 +443,12 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 	if err != nil {
 		return fmt.Errorf("error creating the TimeSeriesMetrics %v", err)
 	}
-	for _, timeSeries := range page.TimeSeries {
+
+	// Make sure we don't feed Prometheus duplicate time series if the
+	// metrics page gives us some.
+	uniqueTimeSeries = c.filterDuplicateTimeSeries(page.TimeSeries)
+
+	for _, timeSeries := range uniqueTimeSeries {
 		newestEndTime := time.Unix(0, 0)
 		for _, point := range timeSeries.Points {
 			endTime, err := time.Parse(time.RFC3339Nano, point.Interval.EndTime)
