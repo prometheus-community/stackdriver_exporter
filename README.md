@@ -1,5 +1,4 @@
 # Google Stackdriver Prometheus Exporter
-[![Build Status](https://circleci.com/gh/prometheus-community/stackdriver_exporter.svg?style=svg)](https://circleci.com/gh/prometheus-community/stackdriver_exporter)
 [![golangci-lint](https://github.com/prometheus-community/stackdriver_exporter/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/prometheus-community/stackdriver_exporter/actions/workflows/golangci-lint.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/prometheus-community/stackdriver_exporter)](https://goreportcard.com/report/github.com/prometheus-community/stackdriver_exporter)
 [![GoDoc](https://pkg.go.dev/badge/github.com/prometheus-community/stackdriver_exporter?status.svg)](https://pkg.go.dev/github.com/prometheus-community/stackdriver_exporter?tab=doc)
