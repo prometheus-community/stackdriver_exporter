@@ -29,7 +29,6 @@ type MetricDeduplicator struct {
 	sentSignatures map[uint64]struct{}
 	indicesSlice   []int // Reusable slice for sorting indices
 	logger         *slog.Logger
-	duplicateCount int64 // Count of duplicates detected
 
 	// Prometheus metrics
 	duplicatesTotal    prometheus.Counter
@@ -83,7 +82,6 @@ func (d *MetricDeduplicator) CheckAndMark(fqName string, labelKeys, labelValues 
 	signature := d.hashLabelsTimestamp(fqName, labelKeys, labelValues, ts)
 
 	if _, exists := d.sentSignatures[signature]; exists {
-		d.duplicateCount++
 		d.duplicatesTotal.Inc()
 
 		// Log duplicate detection at debug level only
@@ -159,15 +157,6 @@ func (d *MetricDeduplicator) hashLabelsTimestamp(fqName string, labelKeys, label
 	}
 
 	return h
-}
-
-// GetStats returns deduplication statistics.
-// Note: totalChecks is available via the checksTotal Prometheus metric.
-func (d *MetricDeduplicator) GetStats() (duplicates int64, uniqueMetrics int) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	return d.duplicateCount, len(d.sentSignatures)
 }
 
 // Describe implements prometheus.Collector interface.
