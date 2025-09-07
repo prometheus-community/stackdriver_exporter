@@ -14,12 +14,15 @@
 package collectors
 
 import (
+	"log/slog"
+	"os"
 	"testing"
 	"time"
 )
 
 func BenchmarkHashLabelsTimestamp(b *testing.B) {
-	dedup := NewMetricDeduplicator()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	dedup := NewMetricDeduplicator(logger)
 	now := time.Now()
 	fqName := "benchmark_metric"
 	keys := []string{"region", "zone", "instance", "project", "service", "method", "version"}

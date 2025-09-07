@@ -216,7 +216,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		histogramStore:                  histogramStore,
 		aggregateDeltas:                 opts.AggregateDeltas,
 		descriptorCache:                 descriptorCache,
-		deduplicator:                    NewMetricDeduplicator(),
+		deduplicator:                    NewMetricDeduplicator(logger),
 	}
 
 	return monitoringCollector, nil
@@ -229,6 +229,7 @@ func (c *MonitoringCollector) Describe(ch chan<- *prometheus.Desc) {
 	c.lastScrapeErrorMetric.Describe(ch)
 	c.lastScrapeTimestampMetric.Describe(ch)
 	c.lastScrapeDurationSecondsMetric.Describe(ch)
+	c.deduplicator.Describe(ch)
 }
 
 func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
@@ -255,6 +256,8 @@ func (c *MonitoringCollector) Collect(ch chan<- prometheus.Metric) {
 
 	c.lastScrapeDurationSecondsMetric.Set(time.Since(begun).Seconds())
 	c.lastScrapeDurationSecondsMetric.Collect(ch)
+
+	c.deduplicator.Collect(ch)
 }
 
 func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metric, begun time.Time) error {
@@ -486,8 +489,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 
 		// Check for duplicate metrics using deduplicator
 		if c.deduplicator.CheckAndMark(timeSeries.Metric.Type, labelKeys, labelValues, newestEndTime) {
-			c.logger.Debug("skipping duplicate metric", "metric", timeSeries.Metric.Type, "timestamp", newestEndTime)
-			continue
+			continue // Duplicate detected and logged by deduplicator
 		}
 
 		switch timeSeries.ValueType {
