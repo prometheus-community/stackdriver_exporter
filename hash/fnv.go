@@ -43,3 +43,10 @@ func AddByte(h uint64, b byte) uint64 {
 	h *= prime64
 	return h
 }
+
+// AddUint64 adds a uint64 to a fnv64a hash value, returning the updated hash.
+func AddUint64(h uint64, val uint64) uint64 {
+	h ^= val
+	h *= prime64
+	return h
+}

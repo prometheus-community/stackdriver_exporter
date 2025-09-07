@@ -57,6 +57,7 @@ type MonitoringCollector struct {
 	histogramStore                  DeltaHistogramStore
 	aggregateDeltas                 bool
 	descriptorCache                 DescriptorCache
+	deduplicator                    *MetricDeduplicator
 }
 
 type MonitoringCollectorOptions struct {
@@ -215,6 +216,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		histogramStore:                  histogramStore,
 		aggregateDeltas:                 opts.AggregateDeltas,
 		descriptorCache:                 descriptorCache,
+		deduplicator:                    NewMetricDeduplicator(),
 	}
 
 	return monitoringCollector, nil
@@ -479,6 +481,12 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 		case "CUMULATIVE":
 			metricValueType = prometheus.CounterValue
 		default:
+			continue
+		}
+
+		// Check for duplicate metrics using deduplicator
+		if c.deduplicator.CheckAndMark(timeSeries.Metric.Type, labelKeys, labelValues, newestEndTime) {
+			c.logger.Debug("skipping duplicate metric", "metric", timeSeries.Metric.Type, "timestamp", newestEndTime)
 			continue
 		}
 
