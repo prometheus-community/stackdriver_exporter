@@ -161,7 +161,7 @@ func getDefaultGCPProject(ctx context.Context) (*string, error) {
 func createMonitoringService(ctx context.Context) (*monitoring.Service, error) {
 	googleClient, err := google.DefaultClient(ctx, monitoring.MonitoringReadScope)
 	if err != nil {
-		return nil, fmt.Errorf("Error creating Google client: %v", err)
+		return nil, fmt.Errorf("error creating Google client: %v", err)
 	}
 
 	googleClient.Timeout = *stackdriverHttpTimeout
@@ -175,7 +175,7 @@ func createMonitoringService(ctx context.Context) (*monitoring.Service, error) {
 
 	monitoringService, err := monitoring.NewService(ctx, option.WithHTTPClient(googleClient), option.WithUniverseDomain(*googleUniverseDomain))
 	if err != nil {
-		return nil, fmt.Errorf("Error creating Google Stackdriver Monitoring service: %v", err)
+		return nil, fmt.Errorf("error creating Google Stackdriver Monitoring service: %v", err)
 	}
 
 	return monitoringService, nil

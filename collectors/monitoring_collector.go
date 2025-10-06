@@ -424,7 +424,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 		for _, point := range timeSeries.Points {
 			endTime, err := time.Parse(time.RFC3339Nano, point.Interval.EndTime)
 			if err != nil {
-				return fmt.Errorf("Error parsing TimeSeries Point interval end time `%s`: %s", point.Interval.EndTime, err)
+				return fmt.Errorf("error parsing TimeSeries Point interval end time `%s`: %s", point.Interval.EndTime, err)
 			}
 			if endTime.After(newestEndTime) {
 				newestEndTime = endTime
@@ -541,7 +541,7 @@ func (c *MonitoringCollector) generateHistogramBuckets(
 			bucketKeys[i] = opts.ExponentialBuckets.Scale * math.Pow(opts.ExponentialBuckets.GrowthFactor, float64(i))
 		}
 	default:
-		return nil, errors.New("Unknown distribution buckets")
+		return nil, errors.New("unknown distribution buckets")
 	}
 	// The last bucket is always infinity
 	// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TypedValue#bucketoptions
