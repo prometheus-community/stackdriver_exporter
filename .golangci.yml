@@ -1,13 +1,9 @@
----
+version: "2"
 linters:
   enable:
-  - sloglint
-
-run:
-  timeout: 5m
-
-issues:
-  exclude-rules:
-    - path: _test.go
-      linters:
-        - errcheck
+    - sloglint
+  exclusions:
+    rules:
+      - linters:
+          - errcheck
+        path: _test.go
