@@ -14,6 +14,7 @@
 package collectors
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -36,10 +37,19 @@ type MetricFilter struct {
 	FilterQuery          string
 }
 
+type MetricAggregationConfig struct {
+	TargetedMetricPrefix string
+	AlignmentPeriod      string
+	CrossSeriesReducer   string
+	GroupByFields        []string
+	PerSeriesAligner     string
+}
+
 type MonitoringCollector struct {
 	projectID                       string
 	metricsTypePrefixes             []string
 	metricsFilters                  []MetricFilter
+	metricsAggregationConfigs       []MetricAggregationConfig
 	metricsInterval                 time.Duration
 	metricsOffset                   time.Duration
 	metricsIngestDelay              bool
@@ -66,6 +76,8 @@ type MonitoringCollectorOptions struct {
 	// ExtraFilters is a list of criteria to apply to each corresponding metric prefix query. If one or more are
 	// applicable to a given metric type prefix, they will be 'AND' concatenated.
 	ExtraFilters []MetricFilter
+	// MetricsWithAggregations is a list of metrics with aggregation options in the format: metric_name:cross_series_reducer:group_by_fields:per_series_aligner. Example: custom.googleapis.com/my_metric:REDUCE_SUM:metric.labels.instance_id,resource.labels.zone:ALIGN_MEAN
+	MetricAggregationConfigs []MetricAggregationConfig
 	// RequestInterval is the time interval used in each request to get metrics. If there are many data points returned
 	// during this interval, only the latest will be reported.
 	RequestInterval time.Duration
@@ -198,6 +210,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		projectID:                       projectID,
 		metricsTypePrefixes:             opts.MetricTypePrefixes,
 		metricsFilters:                  opts.ExtraFilters,
+		metricsAggregationConfigs:       opts.MetricAggregationConfigs,
 		metricsInterval:                 opts.RequestInterval,
 		metricsOffset:                   opts.RequestOffset,
 		metricsIngestDelay:              opts.IngestDelay,
@@ -318,6 +331,16 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 					Filter(filter).
 					IntervalStartTime(startTime.Format(time.RFC3339Nano)).
 					IntervalEndTime(endTime.Format(time.RFC3339Nano))
+
+				for _, ef := range c.metricsAggregationConfigs {
+					if strings.HasPrefix(metricDescriptor.Type, ef.TargetedMetricPrefix) {
+						timeSeriesListCall.AggregationAlignmentPeriod(ef.AlignmentPeriod).
+							AggregationCrossSeriesReducer(ef.CrossSeriesReducer).
+							AggregationGroupByFields(ef.GroupByFields...).
+							AggregationPerSeriesAligner(ef.PerSeriesAligner)
+						break
+					}
+				}
 
 				for {
 					c.apiCallsTotalMetric.Inc()
@@ -449,6 +472,22 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			if !c.keyExists(labelKeys, key) {
 				labelKeys = append(labelKeys, key)
 				labelValues = append(labelValues, value)
+			}
+		}
+
+		// Add the monitored system labels
+		var systemLabels map[string]string
+		if timeSeries.Metadata != nil && timeSeries.Metadata.SystemLabels != nil {
+			err := json.Unmarshal(timeSeries.Metadata.SystemLabels, &systemLabels)
+			if err != nil {
+				c.logger.Error("failed to decode SystemLabels", "err", err)
+			} else {
+				for key, value := range systemLabels {
+					if !c.keyExists(labelKeys, key) {
+						labelKeys = append(labelKeys, key)
+						labelValues = append(labelValues, value)
+					}
+				}
 			}
 		}
 

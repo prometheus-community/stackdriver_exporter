@@ -126,6 +126,11 @@ var (
 		"Filters. i.e: pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")",
 	).Strings()
 
+	monitoringMetricsWithAggregations = kingpin.Flag(
+		"monitoring.metrics-with-aggregations",
+		"Specify metrics with aggregation options in the format: metric_name:alignment_period:cross_series_reducer:group_by_fields:per_series_aligner. Example: custom.googleapis.com/my_metric:60s:REDUCE_SUM:metric.labels.instance_id,resource.labels.zone:ALIGN_MEAN",
+	).Strings()
+
 	monitoringMetricsAggregateDeltas = kingpin.Flag(
 		"monitoring.aggregate-deltas", "If enabled will treat all DELTA metrics as an in-memory counter instead of a gauge",
 	).Default("false").Bool()
@@ -185,12 +190,13 @@ type handler struct {
 	handler http.Handler
 	logger  *slog.Logger
 
-	projectIDs          []string
-	metricsPrefixes     []string
-	metricsExtraFilters []collectors.MetricFilter
-	additionalGatherer  prometheus.Gatherer
-	m                   *monitoring.Service
-	collectors          *collectors.CollectorCache
+	projectIDs                    []string
+	metricsPrefixes               []string
+	metricsExtraFilters           []collectors.MetricFilter
+	metricsWithAggregationConfigs []collectors.MetricAggregationConfig
+	additionalGatherer            prometheus.Gatherer
+	m                             *monitoring.Service
+	collectors                    *collectors.CollectorCache
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -208,7 +214,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters []collectors.MetricFilter, m *monitoring.Service, logger *slog.Logger, additionalGatherer prometheus.Gatherer) *handler {
+func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters []collectors.MetricFilter, metricsWithAggregationConfigs []collectors.MetricAggregationConfig, m *monitoring.Service, logger *slog.Logger, additionalGatherer prometheus.Gatherer) *handler {
 	var ttl time.Duration
 	// Add collector caching TTL as max of deltas aggregation or descriptor caching
 	if *monitoringMetricsAggregateDeltas || *monitoringDescriptorCacheTTL > 0 {
@@ -223,13 +229,14 @@ func newHandler(projectIDs []string, metricPrefixes []string, metricExtraFilters
 	logger.Info("Creating collector cache", "ttl", ttl)
 
 	h := &handler{
-		logger:              logger,
-		projectIDs:          projectIDs,
-		metricsPrefixes:     metricPrefixes,
-		metricsExtraFilters: metricExtraFilters,
-		additionalGatherer:  additionalGatherer,
-		m:                   m,
-		collectors:          collectors.NewCollectorCache(ttl),
+		logger:                        logger,
+		projectIDs:                    projectIDs,
+		metricsPrefixes:               metricPrefixes,
+		metricsExtraFilters:           metricExtraFilters,
+		metricsWithAggregationConfigs: metricsWithAggregationConfigs,
+		additionalGatherer:            additionalGatherer,
+		m:                             m,
+		collectors:                    collectors.NewCollectorCache(ttl),
 	}
 
 	h.handler = h.innerHandler(nil)
@@ -247,6 +254,7 @@ func (h *handler) getCollector(project string, filters map[string]bool) (*collec
 	collector, err := collectors.NewMonitoringCollector(project, h.m, collectors.MonitoringCollectorOptions{
 		MetricTypePrefixes:        filterdPrefixes,
 		ExtraFilters:              h.metricsExtraFilters,
+		MetricAggregationConfigs:  h.metricsWithAggregationConfigs,
 		RequestInterval:           *monitoringMetricsInterval,
 		RequestOffset:             *monitoringMetricsOffset,
 		IngestDelay:               *monitoringMetricsIngestDelay,
@@ -373,24 +381,26 @@ func main() {
 		"build_context", version.BuildContext(),
 		"metric_prefixes", fmt.Sprintf("%v", metricsPrefixes),
 		"extra_filters", strings.Join(*monitoringMetricsExtraFilter, ","),
+		"aggregations", strings.Join(*monitoringMetricsWithAggregations, ","),
 		"projectIDs", fmt.Sprintf("%v", discoveredProjectIDs),
 		"projectsFilter", *projectsFilter,
 	)
 
 	parsedMetricsPrefixes := parseMetricTypePrefixes(metricsPrefixes)
 	metricExtraFilters := parseMetricExtraFilters()
+	metricsWithAggregations := parseMetricsWithAggregations(logger, *monitoringMetricsWithAggregations)
 	// drop duplicate projects
 	slices.Sort(discoveredProjectIDs)
 	uniqueProjectIds := slices.Compact(discoveredProjectIDs)
 
 	if *metricsPath == *stackdriverMetricsPath {
 		handler := newHandler(
-			uniqueProjectIds, parsedMetricsPrefixes, metricExtraFilters, monitoringService, logger, prometheus.DefaultGatherer)
+			uniqueProjectIds, parsedMetricsPrefixes, metricExtraFilters, metricsWithAggregations, monitoringService, logger, prometheus.DefaultGatherer)
 		http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 	} else {
 		logger.Info("Serving Stackdriver metrics at separate path", "path", *stackdriverMetricsPath)
 		handler := newHandler(
-			uniqueProjectIds, parsedMetricsPrefixes, metricExtraFilters, monitoringService, logger, nil)
+			uniqueProjectIds, parsedMetricsPrefixes, metricExtraFilters, metricsWithAggregations, monitoringService, logger, nil)
 		http.Handle(*stackdriverMetricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
 		http.Handle(*metricsPath, promhttp.Handler())
 	}
@@ -467,4 +477,29 @@ func parseMetricExtraFilters() []collectors.MetricFilter {
 		}
 	}
 	return extraFilters
+}
+
+func parseMetricsWithAggregations(logger *slog.Logger, input []string) []collectors.MetricAggregationConfig {
+	var configs []collectors.MetricAggregationConfig
+
+	for _, item := range input {
+		parts := strings.Split(item, ":")
+		if len(parts) != 5 {
+			logger.Error("Invalid format for metrics-with-aggregations", "aggregations", item)
+			continue
+		}
+
+		groupByFields := strings.Split(parts[3], ",")
+
+		config := collectors.MetricAggregationConfig{
+			TargetedMetricPrefix: parts[0],
+			AlignmentPeriod:      parts[1],
+			CrossSeriesReducer:   parts[2],
+			GroupByFields:        groupByFields,
+			PerSeriesAligner:     parts[4],
+		}
+		configs = append(configs, config)
+	}
+
+	return configs
 }
