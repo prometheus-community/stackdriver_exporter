@@ -1,6 +1,7 @@
 ## master / unreleased
 
 - [FEATURE] Add `google.universe-domain` flag to specify the Google Cloud universe to use.
+- [ENHANCEMENT] Enable arm64 docker builds
 
 ## 0.18.0 / 2025-01-16
 
