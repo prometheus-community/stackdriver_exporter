@@ -100,6 +100,7 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 | `web.systemd-socket`                | No       |                           | Use systemd socket activation listeners instead of port listeners (Linux only).                                                                                                                   |
 | `web.stackdriver-telemetry-path`    | No       | `/metrics`                | Path under which to expose Stackdriver metrics.                                                                                                                                                   |
 | `web.telemetry-path`                | No       | `/metrics`                | Path under which to expose Prometheus metrics                                                                                                                                                     |
+| `web.health-check-path`             | No       | `/heath`                  | Path under which to expose health check                                                                                                                                                     |
 
 ### TLS and basic authentication
 
