@@ -14,6 +14,7 @@
 package collectors
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -449,6 +450,33 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			if !c.keyExists(labelKeys, key) {
 				labelKeys = append(labelKeys, key)
 				labelValues = append(labelValues, value)
+			}
+		}
+
+		// Add system metadata labels
+		// @see https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TimeSeries
+		if timeSeries.Metadata != nil && timeSeries.Metadata.SystemLabels != nil {
+			// Marshal the SystemLabels struct to JSON
+			jsonBytes, err := json.Marshal(timeSeries.Metadata.SystemLabels)
+			if err != nil {
+				c.logger.Error("error marshaling SystemLabels to JSON", "err", err)
+				continue
+			}
+
+			// Unmarshal the JSON into a map[string]interface{}
+			var systemLabelsMap map[string]interface{}
+			err = json.Unmarshal(jsonBytes, &systemLabelsMap)
+			if err != nil {
+				c.logger.Error("error unmarshaling JSON to map", "err", err)
+				continue
+			}
+
+			for key, value := range systemLabelsMap {
+				valueStr := fmt.Sprintf("%v", value)
+				if !c.keyExists(labelKeys, key) {
+					labelKeys = append(labelKeys, key)
+					labelValues = append(labelValues, valueStr)
+				}
 			}
 		}
 
