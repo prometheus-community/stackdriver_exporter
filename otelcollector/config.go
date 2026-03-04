@@ -10,45 +10,45 @@ import (
 
 // Config maps stackdriver_exporter runtime settings into exporter_config.
 type Config struct {
-	ProjectIDs      []string `mapstructure:"project_ids"`
-	ProjectsFilter  string   `mapstructure:"projects_filter"`
-	UniverseDomain  string   `mapstructure:"universe_domain"`
-	MaxRetries      int      `mapstructure:"max_retries"`
-	HTTPTimeout     string   `mapstructure:"http_timeout"`
-	MaxBackoff      string   `mapstructure:"max_backoff"`
-	BackoffJitter   string   `mapstructure:"backoff_jitter"`
-	RetryStatuses   []int    `mapstructure:"retry_statuses"`
-	MetricsPrefixes []string `mapstructure:"metrics_prefixes"`
-	MetricsInterval string   `mapstructure:"metrics_interval"`
-	MetricsOffset   string   `mapstructure:"metrics_offset"`
-	MetricsIngest   bool     `mapstructure:"metrics_ingest_delay"`
-	FillMissing     bool     `mapstructure:"fill_missing_labels"`
-	DropDelegated   bool     `mapstructure:"drop_delegated_projects"`
-	Filters         []string `mapstructure:"filters"`
-	AggregateDeltas bool     `mapstructure:"aggregate_deltas"`
-	DeltasTTL       string   `mapstructure:"aggregate_deltas_ttl"`
-	DescriptorTTL   string   `mapstructure:"descriptor_cache_ttl"`
-	DescriptorGoogleOnly bool `mapstructure:"descriptor_cache_only_google"`
+	ProjectIDs           []string `mapstructure:"project_ids"`
+	ProjectsFilter       string   `mapstructure:"projects_filter"`
+	UniverseDomain       string   `mapstructure:"universe_domain"`
+	MaxRetries           int      `mapstructure:"max_retries"`
+	HTTPTimeout          string   `mapstructure:"http_timeout"`
+	MaxBackoff           string   `mapstructure:"max_backoff"`
+	BackoffJitter        string   `mapstructure:"backoff_jitter"`
+	RetryStatuses        []int    `mapstructure:"retry_statuses"`
+	MetricsPrefixes      []string `mapstructure:"metrics_prefixes"`
+	MetricsInterval      string   `mapstructure:"metrics_interval"`
+	MetricsOffset        string   `mapstructure:"metrics_offset"`
+	MetricsIngest        bool     `mapstructure:"metrics_ingest_delay"`
+	FillMissing          bool     `mapstructure:"fill_missing_labels"`
+	DropDelegated        bool     `mapstructure:"drop_delegated_projects"`
+	Filters              []string `mapstructure:"filters"`
+	AggregateDeltas      bool     `mapstructure:"aggregate_deltas"`
+	DeltasTTL            string   `mapstructure:"aggregate_deltas_ttl"`
+	DescriptorTTL        string   `mapstructure:"descriptor_cache_ttl"`
+	DescriptorGoogleOnly bool     `mapstructure:"descriptor_cache_only_google"`
 }
 
 var _ prombridge.Config = (*Config)(nil)
 
 func defaultConfig() *Config {
 	return &Config{
-		UniverseDomain:      "googleapis.com",
-		MaxRetries:          0,
-		HTTPTimeout:         "10s",
-		MaxBackoff:          "5s",
-		BackoffJitter:       "1s",
-		RetryStatuses:       []int{503},
-		MetricsInterval:     "5m",
-		MetricsOffset:       "0s",
-		MetricsIngest:       false,
-		FillMissing:         true,
-		DropDelegated:       false,
-		AggregateDeltas:     false,
-		DeltasTTL:           "30m",
-		DescriptorTTL:       "0s",
+		UniverseDomain:       "googleapis.com",
+		MaxRetries:           0,
+		HTTPTimeout:          "10s",
+		MaxBackoff:           "5s",
+		BackoffJitter:        "1s",
+		RetryStatuses:        []int{503},
+		MetricsInterval:      "5m",
+		MetricsOffset:        "0s",
+		MetricsIngest:        false,
+		FillMissing:          true,
+		DropDelegated:        false,
+		AggregateDeltas:      false,
+		DeltasTTL:            "30m",
+		DescriptorTTL:        "0s",
 		DescriptorGoogleOnly: true,
 	}
 }
@@ -157,4 +157,3 @@ type configUnmarshaler struct{}
 func (configUnmarshaler) GetConfigStruct() prombridge.Config {
 	return defaultConfig()
 }
-

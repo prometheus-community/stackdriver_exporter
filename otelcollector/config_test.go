@@ -151,4 +151,3 @@ func TestConfig_Durations(t *testing.T) {
 		t.Fatalf("DescriptorTTL = %v, want %v", parsed.DescriptorTTL, 0*time.Second)
 	}
 }
-

@@ -40,4 +40,3 @@ func TestFactory_CreateMetrics(t *testing.T) {
 		t.Fatal("CreateMetrics() returned nil receiver")
 	}
 }
-

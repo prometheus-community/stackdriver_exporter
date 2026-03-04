@@ -10,10 +10,10 @@ import (
 
 	prombridge "github.com/ArthurSens/prometheus-collector-bridge"
 	"github.com/PuerkitoBio/rehttp"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
 	"github.com/prometheus-community/stackdriver_exporter/delta"
 	"github.com/prometheus-community/stackdriver_exporter/utils"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/monitoring/v3"
@@ -33,7 +33,7 @@ type lifecycleManager struct {
 
 func newLifecycleManager(logger *slog.Logger) *lifecycleManager {
 	return &lifecycleManager{
-		logger: logger,
+		logger:                   logger,
 		monitoringServiceFactory: createMonitoringService,
 		collectorFactory: func(projectID string, service *monitoring.Service, opts collectors.MonitoringCollectorOptions, deltasTTL time.Duration, logger *slog.Logger) (prometheus.Collector, error) {
 			return collectors.NewMonitoringCollector(
@@ -196,4 +196,3 @@ func parseMetricExtraFilters(raw []string) []collectors.MetricFilter {
 	}
 	return out
 }
-

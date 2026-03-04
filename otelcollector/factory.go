@@ -24,4 +24,3 @@ var (
 	_ prombridge.ExporterLifecycleManager = (*lifecycleManager)(nil)
 	_ prombridge.ConfigUnmarshaler        = (configUnmarshaler{})
 )
-

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
+	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/api/monitoring/v3"
 )
 
@@ -127,5 +127,3 @@ func TestLifecycleManager_Shutdown(t *testing.T) {
 		t.Fatalf("Shutdown() error = %v", err)
 	}
 }
-
-
