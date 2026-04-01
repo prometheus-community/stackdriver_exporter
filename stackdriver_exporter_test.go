@@ -13,8 +13,10 @@
 
 package main
 
-import "testing"
-import "reflect"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestParseMetricTypePrefixes(t *testing.T) {
 	inputPrefixes := []string{
