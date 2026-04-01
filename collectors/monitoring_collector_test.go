@@ -13,7 +13,10 @@
 
 package collectors
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestIsGoogleMetric(t *testing.T) {
 	good := []string{
@@ -35,5 +38,29 @@ func TestIsGoogleMetric(t *testing.T) {
 		if isGoogleMetric(e) {
 			t.Errorf("should not be a google metric: %s", e)
 		}
+	}
+}
+
+func TestParseMetricExtraFilters(t *testing.T) {
+	input := []string{
+		"pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")",
+		"missing-separator",
+		"compute.googleapis.com/instance:metric.labels.instance_name=\"example:vm\"",
+	}
+
+	got := ParseMetricExtraFilters(input)
+	want := []MetricFilter{
+		{
+			TargetedMetricPrefix: "pubsub.googleapis.com/subscription",
+			FilterQuery:          "resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")",
+		},
+		{
+			TargetedMetricPrefix: "compute.googleapis.com/instance",
+			FilterQuery:          "metric.labels.instance_name=\"example:vm\"",
+		},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ParseMetricExtraFilters() = %#v, want %#v", got, want)
 	}
 }

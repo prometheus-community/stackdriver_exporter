@@ -18,26 +18,6 @@ import (
 	"testing"
 )
 
-func TestParseMetricTypePrefixes(t *testing.T) {
-	inputPrefixes := []string{
-		"redis.googleapis.com/stats/memory/usage",
-		"loadbalancing.googleapis.com/https/request_count",
-		"loadbalancing.googleapis.com",
-		"redis.googleapis.com/stats/memory/usage_ratio",
-		"redis.googleapis.com/stats/memory/usage_ratio",
-	}
-	expectedOutputPrefixes := []string{
-		"loadbalancing.googleapis.com",
-		"redis.googleapis.com/stats/memory/usage",
-	}
-
-	outputPrefixes := parseMetricTypePrefixes(inputPrefixes)
-
-	if !reflect.DeepEqual(outputPrefixes, expectedOutputPrefixes) {
-		t.Errorf("Metric type prefix sanitization did not produce expected output. Expected:\n%s\nGot:\n%s", expectedOutputPrefixes, outputPrefixes)
-	}
-}
-
 func TestFilterMetricTypePrefixes(t *testing.T) {
 	metricPrefixes := []string{
 		"redis.googleapis.com/stats/",

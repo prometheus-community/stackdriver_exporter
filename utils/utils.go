@@ -16,6 +16,7 @@ package utils
 import (
 	"context"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/fatih/camelcase"
@@ -47,6 +48,27 @@ func SplitExtraFilter(extraFilter string, separator string) (string, string) {
 		return "", ""
 	}
 	return mPrefix[0], mPrefix[1]
+}
+
+// ParseMetricTypePrefixes sorts prefixes, removes duplicates, and skips prefixes
+// already covered by a broader parent prefix.
+func ParseMetricTypePrefixes(inputPrefixes []string) []string {
+	sortedPrefixes := append([]string(nil), inputPrefixes...)
+	slices.Sort(sortedPrefixes)
+	uniquePrefixes := slices.Compact(sortedPrefixes)
+	metricTypePrefixes := make([]string, 0, len(uniquePrefixes))
+
+	for _, prefix := range uniquePrefixes {
+		if len(metricTypePrefixes) > 0 {
+			previousIndex := len(metricTypePrefixes) - 1
+			if strings.HasPrefix(prefix, metricTypePrefixes[previousIndex]) {
+				continue
+			}
+		}
+		metricTypePrefixes = append(metricTypePrefixes, prefix)
+	}
+
+	return metricTypePrefixes
 }
 
 func ProjectResource(projectID string) string {

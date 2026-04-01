@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
-	"strings"
 	"time"
 
 	prombridge "github.com/ArthurSens/prometheus-collector-bridge"
@@ -85,8 +84,8 @@ func (m *lifecycleManager) Start(ctx context.Context, exporterConfig prombridge.
 	}
 
 	registry := prometheus.NewRegistry()
-	metricPrefixes := parseMetricTypePrefixes(cfg.MetricsPrefixes)
-	extraFilters := parseMetricExtraFilters(cfg.Filters)
+	metricPrefixes := utils.ParseMetricTypePrefixes(cfg.MetricsPrefixes)
+	extraFilters := collectors.ParseMetricExtraFilters(cfg.Filters)
 
 	for _, projectID := range projectIDs {
 		opts := collectors.MonitoringCollectorOptions{
@@ -175,37 +174,4 @@ func createMonitoringService(ctx context.Context, parsed parsedConfig, cfg *Conf
 		return nil, fmt.Errorf("error creating Google Stackdriver Monitoring service: %w", err)
 	}
 	return service, nil
-}
-
-func parseMetricTypePrefixes(input []string) []string {
-	in := append([]string(nil), input...)
-	slices.Sort(in)
-	unique := slices.Compact(in)
-	out := make([]string, 0, len(unique))
-
-	for i, prefix := range unique {
-		if i > 0 && len(out) > 0 {
-			prev := out[len(out)-1]
-			if strings.HasPrefix(prefix, prev) {
-				continue
-			}
-		}
-		out = append(out, prefix)
-	}
-	return out
-}
-
-func parseMetricExtraFilters(raw []string) []collectors.MetricFilter {
-	out := make([]collectors.MetricFilter, 0, len(raw))
-	for _, entry := range raw {
-		prefix, filter := utils.SplitExtraFilter(entry, ":")
-		if prefix == "" {
-			continue
-		}
-		out = append(out, collectors.MetricFilter{
-			TargetedMetricPrefix: strings.ToLower(prefix),
-			FilterQuery:          filter,
-		})
-	}
-	return out
 }
