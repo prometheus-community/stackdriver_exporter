@@ -17,7 +17,7 @@ import (
 	"context"
 	"testing"
 
-	prombridge "github.com/ArthurSens/prometheus-collector-bridge"
+	prombridge "github.com/prometheus/opentelemetry-collector-bridge"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/receiver/receivertest"
 )

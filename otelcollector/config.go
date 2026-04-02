@@ -18,7 +18,7 @@ import (
 	"net/http"
 	"time"
 
-	prombridge "github.com/ArthurSens/prometheus-collector-bridge"
+	prombridge "github.com/prometheus/opentelemetry-collector-bridge"
 )
 
 // Config maps stackdriver_exporter runtime settings into exporter_config.

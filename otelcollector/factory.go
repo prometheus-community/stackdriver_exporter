@@ -16,7 +16,7 @@ package otelcollector
 import (
 	"log/slog"
 
-	prombridge "github.com/ArthurSens/prometheus-collector-bridge"
+	prombridge "github.com/prometheus/opentelemetry-collector-bridge"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/receiver"
 )

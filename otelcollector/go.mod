@@ -3,10 +3,10 @@ module github.com/prometheus-community/stackdriver_exporter/otelcollector
 go 1.25.0
 
 require (
-	github.com/ArthurSens/prometheus-collector-bridge v0.0.0-20260227220117-1744a07e66f4
 	github.com/PuerkitoBio/rehttp v1.4.0
 	github.com/prometheus-community/stackdriver_exporter v0.0.0
 	github.com/prometheus/client_golang v1.23.2
+	github.com/prometheus/opentelemetry-collector-bridge v0.0.0-20260317204527-5fc426455618
 	go.opentelemetry.io/collector/component v1.54.0
 	go.opentelemetry.io/collector/consumer/consumertest v0.148.0
 	go.opentelemetry.io/collector/receiver v1.54.0
@@ -66,6 +66,7 @@ require (
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260128011058-8636f8732409 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260128011058-8636f8732409 // indirect
 	google.golang.org/grpc v1.79.2 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
