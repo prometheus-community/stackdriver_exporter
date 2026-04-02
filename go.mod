@@ -1,6 +1,6 @@
 module github.com/prometheus-community/stackdriver_exporter
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/PuerkitoBio/rehttp v1.4.0
@@ -11,7 +11,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/common v0.66.1
 	github.com/prometheus/exporter-toolkit v0.14.1
-	golang.org/x/oauth2 v0.34.0
+	golang.org/x/oauth2 v0.36.0
 	google.golang.org/api v0.251.0
 )
 
