@@ -36,6 +36,21 @@ type MetricFilter struct {
 	FilterQuery          string
 }
 
+func ParseMetricExtraFilters(raw []string) []MetricFilter {
+	out := make([]MetricFilter, 0, len(raw))
+	for _, entry := range raw {
+		prefix, filter := utils.SplitExtraFilter(entry, ":")
+		if prefix == "" {
+			continue
+		}
+		out = append(out, MetricFilter{
+			TargetedMetricPrefix: strings.ToLower(prefix),
+			FilterQuery:          filter,
+		})
+	}
+	return out
+}
+
 type MonitoringCollector struct {
 	projectID                       string
 	metricsTypePrefixes             []string

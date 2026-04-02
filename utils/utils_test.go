@@ -51,3 +51,27 @@ var _ = Describe("SplitExtraFilter", func() {
 		Expect(filterQuery).To(Equal("filter.name=\"filter:value\""))
 	})
 })
+
+var _ = Describe("ParseMetricTypePrefixes", func() {
+	It("drops duplicates and redundant nested prefixes", func() {
+		inputPrefixes := []string{
+			"redis.googleapis.com/stats/memory/usage",
+			"loadbalancing.googleapis.com/https/request_count",
+			"loadbalancing.googleapis.com",
+			"redis.googleapis.com/stats/memory/usage_ratio",
+			"redis.googleapis.com/stats/memory/usage_ratio",
+		}
+
+		Expect(ParseMetricTypePrefixes(inputPrefixes)).To(Equal([]string{
+			"loadbalancing.googleapis.com",
+			"redis.googleapis.com/stats/memory/usage",
+		}))
+		Expect(inputPrefixes).To(Equal([]string{
+			"redis.googleapis.com/stats/memory/usage",
+			"loadbalancing.googleapis.com/https/request_count",
+			"loadbalancing.googleapis.com",
+			"redis.googleapis.com/stats/memory/usage_ratio",
+			"redis.googleapis.com/stats/memory/usage_ratio",
+		}))
+	})
+})
