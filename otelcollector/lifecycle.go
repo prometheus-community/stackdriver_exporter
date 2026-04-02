@@ -20,12 +20,12 @@ import (
 	"slices"
 	"time"
 
-	prombridge "github.com/ArthurSens/prometheus-collector-bridge"
 	"github.com/PuerkitoBio/rehttp"
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
 	"github.com/prometheus-community/stackdriver_exporter/delta"
 	"github.com/prometheus-community/stackdriver_exporter/utils"
 	"github.com/prometheus/client_golang/prometheus"
+	prombridge "github.com/prometheus/opentelemetry-collector-bridge"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/monitoring/v3"
