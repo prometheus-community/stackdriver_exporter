@@ -14,6 +14,7 @@
 package collectors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -23,7 +24,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/net/context"
 	"google.golang.org/api/monitoring/v3"
 
 	"github.com/prometheus-community/stackdriver_exporter/utils"
