@@ -101,6 +101,14 @@ func SharedOptions() SharedConfig {
 	return out
 }
 
+func CLIFlag(fieldName string) string {
+	option, ok := sharedOptions[fieldName]
+	if !ok {
+		panic(fmt.Sprintf("unknown shared option %q", fieldName))
+	}
+	return option.CLIFlag
+}
+
 func anyValues[T any](values []T) []any {
 	out := make([]any, 0, len(values))
 	for _, value := range values {

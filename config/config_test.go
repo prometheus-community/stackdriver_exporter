@@ -82,6 +82,18 @@ func TestValidateRetryStatuses(t *testing.T) {
 	}
 }
 
+func TestCLIFlag_PanicsOnUnknownOption(t *testing.T) {
+	t.Parallel()
+
+	defer func() {
+		if recover() == nil {
+			t.Fatal("CLIFlag() did not panic for an unknown option")
+		}
+	}()
+
+	_ = CLIFlag("DoesNotExist")
+}
+
 func TestNormalizeProjectIDs(t *testing.T) {
 	t.Parallel()
 

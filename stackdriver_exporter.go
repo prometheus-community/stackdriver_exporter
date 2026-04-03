@@ -58,35 +58,35 @@ var (
 	).String()
 
 	projectIDs = kingpin.Flag(
-		"google.project-ids", "Repeatable flag of Google Project IDs",
+		config.CLIFlag("ProjectIDs"), "Repeatable flag of Google Project IDs",
 	).Strings()
 
 	projectsFilter = kingpin.Flag(
-		"google.projects.filter", "Google projects search filter.",
+		config.CLIFlag("ProjectsFilter"), "Google projects search filter.",
 	).String()
 
 	googleUniverseDomain = kingpin.Flag(
-		"google.universe-domain", "The Cloud universe to use.",
+		config.CLIFlag("UniverseDomain"), "The Cloud universe to use.",
 	).Default(config.DefaultUniverseDomain).String()
 
 	stackdriverMaxRetries = kingpin.Flag(
-		"stackdriver.max-retries", "Max number of retries that should be attempted on 503 errors from stackdriver.",
+		config.CLIFlag("MaxRetries"), "Max number of retries that should be attempted on 503 errors from stackdriver.",
 	).Default(strconv.Itoa(config.DefaultMaxRetries)).Int()
 
 	stackdriverHttpTimeout = kingpin.Flag(
-		"stackdriver.http-timeout", "How long should stackdriver_exporter wait for a result from the Stackdriver API.",
+		config.CLIFlag("HTTPTimeout"), "How long should stackdriver_exporter wait for a result from the Stackdriver API.",
 	).Default(config.DefaultHTTPTimeout).Duration()
 
 	stackdriverMaxBackoffDuration = kingpin.Flag(
-		"stackdriver.max-backoff", "Max time between each request in an exp backoff scenario.",
+		config.CLIFlag("MaxBackoff"), "Max time between each request in an exp backoff scenario.",
 	).Default(config.DefaultMaxBackoff).Duration()
 
 	stackdriverBackoffJitterBase = kingpin.Flag(
-		"stackdriver.backoff-jitter", "The amount of jitter to introduce in a exp backoff scenario.",
+		config.CLIFlag("BackoffJitter"), "The amount of jitter to introduce in a exp backoff scenario.",
 	).Default(config.DefaultBackoffJitter).Duration()
 
 	stackdriverRetryStatuses = kingpin.Flag(
-		"stackdriver.retry-statuses", "The HTTP statuses that should trigger a retry.",
+		config.CLIFlag("RetryStatuses"), "The HTTP statuses that should trigger a retry.",
 	).Default(defaultRetryStatuses()...).Ints()
 
 	// Monitoring collector flags
@@ -95,48 +95,48 @@ var (
 	).String()
 
 	monitoringMetricsPrefixes = kingpin.Flag(
-		"monitoring.metrics-prefixes", "Google Stackdriver Monitoring Metric Type prefixes. Repeat this flag to scrape multiple prefixes.",
+		config.CLIFlag("MetricsPrefixes"), "Google Stackdriver Monitoring Metric Type prefixes. Repeat this flag to scrape multiple prefixes.",
 	).Strings()
 
 	monitoringMetricsInterval = kingpin.Flag(
-		"monitoring.metrics-interval", "Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used.",
+		config.CLIFlag("MetricsInterval"), "Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used.",
 	).Default(config.DefaultMetricsInterval).Duration()
 
 	monitoringMetricsOffset = kingpin.Flag(
-		"monitoring.metrics-offset", "Offset for the Google Stackdriver Monitoring Metrics interval into the past.",
+		config.CLIFlag("MetricsOffset"), "Offset for the Google Stackdriver Monitoring Metrics interval into the past.",
 	).Default(config.DefaultMetricsOffset).Duration()
 
 	monitoringMetricsIngestDelay = kingpin.Flag(
-		"monitoring.metrics-ingest-delay", "Offset for the Google Stackdriver Monitoring Metrics interval into the past by the ingest delay from the metric's metadata.",
+		config.CLIFlag("MetricsIngest"), "Offset for the Google Stackdriver Monitoring Metrics interval into the past by the ingest delay from the metric's metadata.",
 	).Default(strconv.FormatBool(config.DefaultMetricsIngest)).Bool()
 
 	collectorFillMissingLabels = kingpin.Flag(
-		"collector.fill-missing-labels", "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure.",
+		config.CLIFlag("FillMissing"), "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure.",
 	).Default(strconv.FormatBool(config.DefaultFillMissing)).Bool()
 
 	monitoringDropDelegatedProjects = kingpin.Flag(
-		"monitoring.drop-delegated-projects", "Drop metrics from attached projects and fetch `project_id` only.",
+		config.CLIFlag("DropDelegated"), "Drop metrics from attached projects and fetch `project_id` only.",
 	).Default(strconv.FormatBool(config.DefaultDropDelegated)).Bool()
 
 	monitoringMetricsExtraFilter = kingpin.Flag(
-		"monitoring.filters",
+		config.CLIFlag("Filters"),
 		"Filters. i.e: pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")",
 	).Strings()
 
 	monitoringMetricsAggregateDeltas = kingpin.Flag(
-		"monitoring.aggregate-deltas", "If enabled will treat all DELTA metrics as an in-memory counter instead of a gauge",
+		config.CLIFlag("AggregateDeltas"), "If enabled will treat all DELTA metrics as an in-memory counter instead of a gauge",
 	).Default(strconv.FormatBool(config.DefaultAggregateDeltas)).Bool()
 
 	monitoringMetricsDeltasTTL = kingpin.Flag(
-		"monitoring.aggregate-deltas-ttl", "How long should a delta metric continue to be exported after GCP stops producing a metric",
+		config.CLIFlag("DeltasTTL"), "How long should a delta metric continue to be exported after GCP stops producing a metric",
 	).Default(config.DefaultDeltasTTL).Duration()
 
 	monitoringDescriptorCacheTTL = kingpin.Flag(
-		"monitoring.descriptor-cache-ttl", "How long should the metric descriptors for a prefixed be cached for",
+		config.CLIFlag("DescriptorTTL"), "How long should the metric descriptors for a prefixed be cached for",
 	).Default(config.DefaultDescriptorTTL).Duration()
 
 	monitoringDescriptorCacheOnlyGoogle = kingpin.Flag(
-		"monitoring.descriptor-cache-only-google", "Only cache descriptors for *.googleapis.com metrics",
+		config.CLIFlag("DescriptorGoogleOnly"), "Only cache descriptors for *.googleapis.com metrics",
 	).Default(strconv.FormatBool(config.DefaultDescriptorGoogleOnly)).Bool()
 )
 
