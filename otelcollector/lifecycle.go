@@ -17,19 +17,15 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"slices"
 	"time"
 
-	"github.com/PuerkitoBio/rehttp"
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
+	"github.com/prometheus-community/stackdriver_exporter/config"
 	"github.com/prometheus-community/stackdriver_exporter/delta"
 	"github.com/prometheus-community/stackdriver_exporter/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	prombridge "github.com/prometheus/opentelemetry-collector-bridge"
-	"golang.org/x/oauth2/google"
-	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/monitoring/v3"
-	"google.golang.org/api/option"
 )
 
 type collectorFactoryFunc func(projectID string, service *monitoring.Service, opts collectors.MonitoringCollectorOptions, deltasTTL time.Duration, logger *slog.Logger) (prometheus.Collector, error)
@@ -37,7 +33,7 @@ type collectorFactoryFunc func(projectID string, service *monitoring.Service, op
 type lifecycleManager struct {
 	logger *slog.Logger
 
-	monitoringServiceFactory func(ctx context.Context, parsed parsedConfig, cfg *Config) (*monitoring.Service, error)
+	monitoringServiceFactory func(ctx context.Context, cfg config.RuntimeConfig) (*monitoring.Service, error)
 	collectorFactory         collectorFactoryFunc
 	filterProjectDiscoverer  func(ctx context.Context, filter string) ([]string, error)
 	defaultProjectDiscoverer func(ctx context.Context) (string, error)
@@ -45,8 +41,10 @@ type lifecycleManager struct {
 
 func newLifecycleManager(logger *slog.Logger) *lifecycleManager {
 	return &lifecycleManager{
-		logger:                   logger,
-		monitoringServiceFactory: createMonitoringService,
+		logger: logger,
+		monitoringServiceFactory: func(ctx context.Context, cfg config.RuntimeConfig) (*monitoring.Service, error) {
+			return cfg.CreateMonitoringService(ctx)
+		},
 		collectorFactory: func(projectID string, service *monitoring.Service, opts collectors.MonitoringCollectorOptions, deltasTTL time.Duration, logger *slog.Logger) (prometheus.Collector, error) {
 			return collectors.NewMonitoringCollector(
 				projectID,
@@ -58,7 +56,7 @@ func newLifecycleManager(logger *slog.Logger) *lifecycleManager {
 			)
 		},
 		filterProjectDiscoverer:  utils.GetProjectIDsFromFilter,
-		defaultProjectDiscoverer: discoverDefaultProjectID,
+		defaultProjectDiscoverer: config.DiscoverDefaultProjectID,
 	}
 }
 
@@ -68,7 +66,7 @@ func (m *lifecycleManager) Start(ctx context.Context, exporterConfig prombridge.
 		return nil, fmt.Errorf("invalid exporter config type: %T", exporterConfig)
 	}
 
-	parsed, err := cfg.parsedDurations()
+	runtimeCfg, err := cfg.runtimeConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -78,30 +76,15 @@ func (m *lifecycleManager) Start(ctx context.Context, exporterConfig prombridge.
 		return nil, err
 	}
 
-	monitoringService, err := m.monitoringServiceFactory(ctx, parsed, cfg)
+	monitoringService, err := m.monitoringServiceFactory(ctx, runtimeCfg)
 	if err != nil {
 		return nil, err
 	}
 
 	registry := prometheus.NewRegistry()
-	metricPrefixes := utils.ParseMetricTypePrefixes(cfg.MetricsPrefixes)
-	extraFilters := collectors.ParseMetricExtraFilters(cfg.Filters)
 
 	for _, projectID := range projectIDs {
-		opts := collectors.MonitoringCollectorOptions{
-			MetricTypePrefixes:        metricPrefixes,
-			ExtraFilters:              extraFilters,
-			RequestInterval:           parsed.MetricsInterval,
-			RequestOffset:             parsed.MetricsOffset,
-			IngestDelay:               cfg.MetricsIngest,
-			FillMissingLabels:         cfg.FillMissing,
-			DropDelegatedProjects:     cfg.DropDelegated,
-			AggregateDeltas:           cfg.AggregateDeltas,
-			DescriptorCacheTTL:        parsed.DescriptorTTL,
-			DescriptorCacheOnlyGoogle: cfg.DescriptorGoogleOnly,
-		}
-
-		collector, err := m.collectorFactory(projectID, monitoringService, opts, parsed.DeltasTTL, m.logger)
+		collector, err := m.collectorFactory(projectID, monitoringService, runtimeCfg.MonitoringCollectorOptions(), runtimeCfg.DeltasTTL, m.logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create collector for project %q: %w", projectID, err)
 		}
@@ -138,40 +121,5 @@ func (m *lifecycleManager) resolveProjectIDs(ctx context.Context, cfg *Config) (
 		projectIDs = append(projectIDs, projectID)
 	}
 
-	slices.Sort(projectIDs)
-	return slices.Compact(projectIDs), nil
-}
-
-func discoverDefaultProjectID(ctx context.Context) (string, error) {
-	credentials, err := google.FindDefaultCredentials(ctx, compute.ComputeScope)
-	if err != nil {
-		return "", err
-	}
-	if credentials.ProjectID == "" {
-		return "", fmt.Errorf("unable to identify default GCP project")
-	}
-	return credentials.ProjectID, nil
-}
-
-func createMonitoringService(ctx context.Context, parsed parsedConfig, cfg *Config) (*monitoring.Service, error) {
-	googleClient, err := google.DefaultClient(ctx, monitoring.MonitoringReadScope)
-	if err != nil {
-		return nil, fmt.Errorf("error creating Google client: %w", err)
-	}
-
-	googleClient.Timeout = parsed.HTTPTimeout
-	googleClient.Transport = rehttp.NewTransport(
-		googleClient.Transport,
-		rehttp.RetryAll(
-			rehttp.RetryMaxRetries(cfg.MaxRetries),
-			rehttp.RetryStatuses(cfg.RetryStatuses...),
-		),
-		rehttp.ExpJitterDelay(parsed.BackoffJitter, parsed.MaxBackoff),
-	)
-
-	service, err := monitoring.NewService(ctx, option.WithHTTPClient(googleClient), option.WithUniverseDomain(cfg.UniverseDomain))
-	if err != nil {
-		return nil, fmt.Errorf("error creating Google Stackdriver Monitoring service: %w", err)
-	}
-	return service, nil
+	return config.DeduplicateProjectIDs(projectIDs), nil
 }

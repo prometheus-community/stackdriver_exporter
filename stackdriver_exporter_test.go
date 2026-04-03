@@ -16,6 +16,8 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/prometheus-community/stackdriver_exporter/config"
 )
 
 func TestFilterMetricTypePrefixes(t *testing.T) {
@@ -24,7 +26,9 @@ func TestFilterMetricTypePrefixes(t *testing.T) {
 	}
 
 	h := &handler{
-		metricsPrefixes: metricPrefixes,
+		cfg: config.RuntimeConfig{
+			MetricsPrefixes: metricPrefixes,
+		},
 	}
 
 	inputFilters := map[string]bool{

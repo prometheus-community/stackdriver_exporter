@@ -17,11 +17,13 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
+	"github.com/prometheus-community/stackdriver_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/api/monitoring/v3"
 )
@@ -42,12 +44,16 @@ func TestLifecycleManager_Start(t *testing.T) {
 	}
 
 	var createdProjects []string
+	var gotOpts collectors.MonitoringCollectorOptions
+	var gotDeltasTTL time.Duration
 	mgr := newLifecycleManager(slog.Default())
-	mgr.monitoringServiceFactory = func(context.Context, parsedConfig, *Config) (*monitoring.Service, error) {
+	mgr.monitoringServiceFactory = func(context.Context, config.RuntimeConfig) (*monitoring.Service, error) {
 		return &monitoring.Service{}, nil
 	}
-	mgr.collectorFactory = func(projectID string, _ *monitoring.Service, _ collectors.MonitoringCollectorOptions, _ time.Duration, _ *slog.Logger) (prometheus.Collector, error) {
+	mgr.collectorFactory = func(projectID string, _ *monitoring.Service, opts collectors.MonitoringCollectorOptions, deltasTTL time.Duration, _ *slog.Logger) (prometheus.Collector, error) {
 		createdProjects = append(createdProjects, projectID)
+		gotOpts = opts
+		gotDeltasTTL = deltasTTL
 		return prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "test_metric_" + strings.ReplaceAll(projectID, "-", "_"),
 			Help: "test",
@@ -63,6 +69,24 @@ func TestLifecycleManager_Start(t *testing.T) {
 	}
 	if len(createdProjects) != 2 {
 		t.Fatalf("collectorFactory called %d times, want 2", len(createdProjects))
+	}
+	wantOpts := collectors.MonitoringCollectorOptions{
+		MetricTypePrefixes:        config.ParseMetricPrefixes(cfg.MetricsPrefixes),
+		ExtraFilters:              config.ParseMetricFilters(cfg.Filters),
+		RequestInterval:           5 * time.Minute,
+		RequestOffset:             0,
+		IngestDelay:               false,
+		FillMissingLabels:         false,
+		DropDelegatedProjects:     false,
+		AggregateDeltas:           false,
+		DescriptorCacheTTL:        0,
+		DescriptorCacheOnlyGoogle: false,
+	}
+	if !reflect.DeepEqual(gotOpts, wantOpts) {
+		t.Fatalf("collector options = %#v, want %#v", gotOpts, wantOpts)
+	}
+	if gotDeltasTTL != 30*time.Minute {
+		t.Fatalf("deltas TTL = %v, want %v", gotDeltasTTL, 30*time.Minute)
 	}
 
 	// Ensure the created registry can gather metrics.
@@ -89,7 +113,7 @@ func TestLifecycleManager_Start_UsesDefaultProjectDiscovery(t *testing.T) {
 	mgr.defaultProjectDiscoverer = func(context.Context) (string, error) {
 		return "auto-project", nil
 	}
-	mgr.monitoringServiceFactory = func(context.Context, parsedConfig, *Config) (*monitoring.Service, error) {
+	mgr.monitoringServiceFactory = func(context.Context, config.RuntimeConfig) (*monitoring.Service, error) {
 		return &monitoring.Service{}, nil
 	}
 	mgr.collectorFactory = func(projectID string, _ *monitoring.Service, _ collectors.MonitoringCollectorOptions, _ time.Duration, _ *slog.Logger) (prometheus.Collector, error) {
@@ -120,7 +144,7 @@ func TestLifecycleManager_Start_ReturnsErrorFromCollectorFactory(t *testing.T) {
 	}
 
 	mgr := newLifecycleManager(slog.Default())
-	mgr.monitoringServiceFactory = func(context.Context, parsedConfig, *Config) (*monitoring.Service, error) {
+	mgr.monitoringServiceFactory = func(context.Context, config.RuntimeConfig) (*monitoring.Service, error) {
 		return &monitoring.Service{}, nil
 	}
 	mgr.collectorFactory = func(string, *monitoring.Service, collectors.MonitoringCollectorOptions, time.Duration, *slog.Logger) (prometheus.Collector, error) {
