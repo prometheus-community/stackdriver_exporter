@@ -95,16 +95,29 @@ func TestValidateRetryStatuses(t *testing.T) {
 	}
 }
 
-func TestCLIFlag_PanicsOnUnknownOption(t *testing.T) {
+func TestAllOptionsHaveUniqueKeys(t *testing.T) {
 	t.Parallel()
 
-	defer func() {
-		if recover() == nil {
-			t.Fatal("CLIFlag() did not panic for an unknown option")
-		}
-	}()
+	cliFlags := make(map[string]struct{}, len(AllOptions))
+	otelKeys := make(map[string]struct{}, len(AllOptions))
 
-	_ = CLIFlag("DoesNotExist")
+	for _, option := range AllOptions {
+		if option.CLIFlag == "" {
+			t.Fatal("AllOptions contains an option with an empty CLI flag")
+		}
+		if _, ok := cliFlags[option.CLIFlag]; ok {
+			t.Fatalf("AllOptions contains duplicate CLI flag %q", option.CLIFlag)
+		}
+		cliFlags[option.CLIFlag] = struct{}{}
+
+		if option.OTelKey == "" {
+			t.Fatal("AllOptions contains an option with an empty OTel key")
+		}
+		if _, ok := otelKeys[option.OTelKey]; ok {
+			t.Fatalf("AllOptions contains duplicate OTel key %q", option.OTelKey)
+		}
+		otelKeys[option.OTelKey] = struct{}{}
+	}
 }
 
 func TestNormalizeProjectIDs(t *testing.T) {

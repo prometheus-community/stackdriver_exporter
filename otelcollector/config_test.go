@@ -14,8 +14,11 @@
 package otelcollector
 
 import (
+	"reflect"
 	"testing"
 	"time"
+
+	"github.com/prometheus-community/stackdriver_exporter/config"
 )
 
 func TestConfig_Validate(t *testing.T) {
@@ -162,5 +165,56 @@ func TestConfig_Durations(t *testing.T) {
 	}
 	if parsed.DescriptorTTL != 0 {
 		t.Fatalf("DescriptorTTL = %v, want %v", parsed.DescriptorTTL, 0*time.Second)
+	}
+}
+
+func TestDefaultComponentDefaultsMatchOptionDefaults(t *testing.T) {
+	t.Parallel()
+
+	defaults := defaultComponentDefaults()
+
+	for _, option := range config.AllOptions {
+		value, ok := defaults[option.OTelKey]
+		if option.Default != nil {
+			if !ok {
+				t.Fatalf("defaultComponentDefaults() missing key %q", option.OTelKey)
+			}
+			if !reflect.DeepEqual(value, option.Default) {
+				t.Fatalf("defaultComponentDefaults()[%q] = %#v, want %#v", option.OTelKey, value, option.Default)
+			}
+			continue
+		}
+
+		if ok {
+			t.Fatalf("defaultComponentDefaults() unexpectedly includes key %q", option.OTelKey)
+		}
+	}
+}
+
+func TestConfigMapstructureTagsMatchAllOptions(t *testing.T) {
+	t.Parallel()
+
+	cfgType := reflect.TypeOf(Config{})
+	tags := make(map[string]struct{}, cfgType.NumField())
+	for i := 0; i < cfgType.NumField(); i++ {
+		tag := cfgType.Field(i).Tag.Get("mapstructure")
+		if tag == "" {
+			continue
+		}
+		tags[tag] = struct{}{}
+	}
+
+	optionKeys := make(map[string]struct{}, len(config.AllOptions))
+	for _, option := range config.AllOptions {
+		optionKeys[option.OTelKey] = struct{}{}
+		if _, ok := tags[option.OTelKey]; !ok {
+			t.Fatalf("Config is missing mapstructure tag %q", option.OTelKey)
+		}
+	}
+
+	for tag := range tags {
+		if _, ok := optionKeys[tag]; !ok {
+			t.Fatalf("AllOptions is missing config key %q", tag)
+		}
 	}
 }
