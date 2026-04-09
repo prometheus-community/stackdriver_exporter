@@ -29,10 +29,10 @@ import (
 	"google.golang.org/api/option"
 )
 
-type SharedOption struct {
+type Option struct {
 	CLIFlag string
 	OTelKey string
-	Default []any
+	Default any
 }
 
 const (
@@ -52,29 +52,52 @@ const (
 	DefaultDescriptorGoogleOnly = true
 )
 
+// DefaultRetryStatuses must be treated as immutable after declaration.
 var DefaultRetryStatuses = []int{http.StatusServiceUnavailable}
 
-var sharedOptions = map[string]SharedOption{
-	"ProjectIDs":           {CLIFlag: "google.project-ids", OTelKey: "project_ids"},
-	"ProjectsFilter":       {CLIFlag: "google.projects.filter", OTelKey: "projects_filter"},
-	"UniverseDomain":       {CLIFlag: "google.universe-domain", OTelKey: "universe_domain", Default: []any{DefaultUniverseDomain}},
-	"MaxRetries":           {CLIFlag: "stackdriver.max-retries", OTelKey: "max_retries", Default: []any{DefaultMaxRetries}},
-	"HTTPTimeout":          {CLIFlag: "stackdriver.http-timeout", OTelKey: "http_timeout", Default: []any{DefaultHTTPTimeout}},
-	"MaxBackoff":           {CLIFlag: "stackdriver.max-backoff", OTelKey: "max_backoff", Default: []any{DefaultMaxBackoff}},
-	"BackoffJitter":        {CLIFlag: "stackdriver.backoff-jitter", OTelKey: "backoff_jitter", Default: []any{DefaultBackoffJitter}},
-	"RetryStatuses":        {CLIFlag: "stackdriver.retry-statuses", OTelKey: "retry_statuses", Default: anyValues(DefaultRetryStatuses)},
-	"MetricsPrefixes":      {CLIFlag: "monitoring.metrics-prefixes", OTelKey: "metrics_prefixes"},
-	"MetricsInterval":      {CLIFlag: "monitoring.metrics-interval", OTelKey: "metrics_interval", Default: []any{DefaultMetricsInterval}},
-	"MetricsOffset":        {CLIFlag: "monitoring.metrics-offset", OTelKey: "metrics_offset", Default: []any{DefaultMetricsOffset}},
-	"MetricsIngest":        {CLIFlag: "monitoring.metrics-ingest-delay", OTelKey: "metrics_ingest_delay", Default: []any{DefaultMetricsIngest}},
-	"FillMissing":          {CLIFlag: "collector.fill-missing-labels", OTelKey: "fill_missing_labels", Default: []any{DefaultFillMissing}},
-	"DropDelegated":        {CLIFlag: "monitoring.drop-delegated-projects", OTelKey: "drop_delegated_projects", Default: []any{DefaultDropDelegated}},
-	"Filters":              {CLIFlag: "monitoring.filters", OTelKey: "filters"},
-	"AggregateDeltas":      {CLIFlag: "monitoring.aggregate-deltas", OTelKey: "aggregate_deltas", Default: []any{DefaultAggregateDeltas}},
-	"DeltasTTL":            {CLIFlag: "monitoring.aggregate-deltas-ttl", OTelKey: "aggregate_deltas_ttl", Default: []any{DefaultDeltasTTL}},
-	"DescriptorTTL":        {CLIFlag: "monitoring.descriptor-cache-ttl", OTelKey: "descriptor_cache_ttl", Default: []any{DefaultDescriptorTTL}},
-	"DescriptorGoogleOnly": {CLIFlag: "monitoring.descriptor-cache-only-google", OTelKey: "descriptor_cache_only_google", Default: []any{DefaultDescriptorGoogleOnly}},
-}
+var (
+	ProjectIDs           = Option{CLIFlag: "google.project-ids", OTelKey: "project_ids"}
+	ProjectsFilter       = Option{CLIFlag: "google.projects.filter", OTelKey: "projects_filter"}
+	UniverseDomain       = Option{CLIFlag: "google.universe-domain", OTelKey: "universe_domain", Default: DefaultUniverseDomain}
+	MaxRetries           = Option{CLIFlag: "stackdriver.max-retries", OTelKey: "max_retries", Default: DefaultMaxRetries}
+	HTTPTimeout          = Option{CLIFlag: "stackdriver.http-timeout", OTelKey: "http_timeout", Default: DefaultHTTPTimeout}
+	MaxBackoff           = Option{CLIFlag: "stackdriver.max-backoff", OTelKey: "max_backoff", Default: DefaultMaxBackoff}
+	BackoffJitter        = Option{CLIFlag: "stackdriver.backoff-jitter", OTelKey: "backoff_jitter", Default: DefaultBackoffJitter}
+	RetryStatuses        = Option{CLIFlag: "stackdriver.retry-statuses", OTelKey: "retry_statuses", Default: DefaultRetryStatuses}
+	MetricsPrefixes      = Option{CLIFlag: "monitoring.metrics-prefixes", OTelKey: "metrics_prefixes"}
+	MetricsInterval      = Option{CLIFlag: "monitoring.metrics-interval", OTelKey: "metrics_interval", Default: DefaultMetricsInterval}
+	MetricsOffset        = Option{CLIFlag: "monitoring.metrics-offset", OTelKey: "metrics_offset", Default: DefaultMetricsOffset}
+	MetricsIngest        = Option{CLIFlag: "monitoring.metrics-ingest-delay", OTelKey: "metrics_ingest_delay", Default: DefaultMetricsIngest}
+	FillMissing          = Option{CLIFlag: "collector.fill-missing-labels", OTelKey: "fill_missing_labels", Default: DefaultFillMissing}
+	DropDelegated        = Option{CLIFlag: "monitoring.drop-delegated-projects", OTelKey: "drop_delegated_projects", Default: DefaultDropDelegated}
+	Filters              = Option{CLIFlag: "monitoring.filters", OTelKey: "filters"}
+	AggregateDeltas      = Option{CLIFlag: "monitoring.aggregate-deltas", OTelKey: "aggregate_deltas", Default: DefaultAggregateDeltas}
+	DeltasTTL            = Option{CLIFlag: "monitoring.aggregate-deltas-ttl", OTelKey: "aggregate_deltas_ttl", Default: DefaultDeltasTTL}
+	DescriptorTTL        = Option{CLIFlag: "monitoring.descriptor-cache-ttl", OTelKey: "descriptor_cache_ttl", Default: DefaultDescriptorTTL}
+	DescriptorGoogleOnly = Option{CLIFlag: "monitoring.descriptor-cache-only-google", OTelKey: "descriptor_cache_only_google", Default: DefaultDescriptorGoogleOnly}
+
+	AllOptions = []Option{
+		ProjectIDs,
+		ProjectsFilter,
+		UniverseDomain,
+		MaxRetries,
+		HTTPTimeout,
+		MaxBackoff,
+		BackoffJitter,
+		RetryStatuses,
+		MetricsPrefixes,
+		MetricsInterval,
+		MetricsOffset,
+		MetricsIngest,
+		FillMissing,
+		DropDelegated,
+		Filters,
+		AggregateDeltas,
+		DeltasTTL,
+		DescriptorTTL,
+		DescriptorGoogleOnly,
+	}
+)
 
 type RuntimeConfig struct {
 	ProjectIDs           []string
@@ -98,20 +121,16 @@ type RuntimeConfig struct {
 	DescriptorGoogleOnly bool
 }
 
-func CLIFlag(fieldName string) string {
-	option, ok := sharedOptions[fieldName]
-	if !ok {
-		panic(fmt.Sprintf("unknown shared option %q", fieldName))
+func OTelComponentDefaults() map[string]interface{} {
+	defaults := make(map[string]interface{}, len(AllOptions))
+	for _, option := range AllOptions {
+		if option.Default == nil {
+			continue
+		}
+		// Option defaults are shared values and must not be mutated by callers.
+		defaults[option.OTelKey] = option.Default
 	}
-	return option.CLIFlag
-}
-
-func anyValues[T any](values []T) []any {
-	out := make([]any, 0, len(values))
-	for _, value := range values {
-		out = append(out, value)
-	}
-	return out
+	return defaults
 }
 
 func ParseDuration(name, raw string) (time.Duration, error) {

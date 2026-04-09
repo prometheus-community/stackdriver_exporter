@@ -68,24 +68,7 @@ func defaultConfig() *Config {
 }
 
 func defaultComponentDefaults() map[string]interface{} {
-	cfg := defaultConfig()
-	return map[string]interface{}{
-		"max_retries":                  cfg.MaxRetries,
-		"http_timeout":                 cfg.HTTPTimeout,
-		"max_backoff":                  cfg.MaxBackoff,
-		"backoff_jitter":               cfg.BackoffJitter,
-		"retry_statuses":               cfg.RetryStatuses,
-		"universe_domain":              cfg.UniverseDomain,
-		"metrics_interval":             cfg.MetricsInterval,
-		"metrics_offset":               cfg.MetricsOffset,
-		"metrics_ingest_delay":         cfg.MetricsIngest,
-		"fill_missing_labels":          cfg.FillMissing,
-		"drop_delegated_projects":      cfg.DropDelegated,
-		"aggregate_deltas":             cfg.AggregateDeltas,
-		"aggregate_deltas_ttl":         cfg.DeltasTTL,
-		"descriptor_cache_ttl":         cfg.DescriptorTTL,
-		"descriptor_cache_only_google": cfg.DescriptorGoogleOnly,
-	}
+	return config.OTelComponentDefaults()
 }
 
 func (c *Config) Validate() error {
