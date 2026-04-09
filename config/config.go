@@ -29,10 +29,6 @@ import (
 	"google.golang.org/api/option"
 )
 
-// SharedConfig holds configuration information that is shared
-// between the stackdriver_exporter and the otelcollector modules.
-type SharedConfig map[string]SharedOption
-
 type SharedOption struct {
 	CLIFlag string
 	OTelKey string
@@ -58,7 +54,7 @@ const (
 
 var DefaultRetryStatuses = []int{http.StatusServiceUnavailable}
 
-var sharedOptions = SharedConfig{
+var sharedOptions = map[string]SharedOption{
 	"ProjectIDs":           {CLIFlag: "google.project-ids", OTelKey: "project_ids"},
 	"ProjectsFilter":       {CLIFlag: "google.projects.filter", OTelKey: "projects_filter"},
 	"UniverseDomain":       {CLIFlag: "google.universe-domain", OTelKey: "universe_domain", Default: []any{DefaultUniverseDomain}},
@@ -102,18 +98,6 @@ type RuntimeConfig struct {
 	DescriptorGoogleOnly bool
 }
 
-func SharedOptions() SharedConfig {
-	out := make(SharedConfig, len(sharedOptions))
-	for fieldName, option := range sharedOptions {
-		out[fieldName] = SharedOption{
-			CLIFlag: option.CLIFlag,
-			OTelKey: option.OTelKey,
-			Default: slices.Clone(option.Default),
-		}
-	}
-	return out
-}
-
 func CLIFlag(fieldName string) string {
 	option, ok := sharedOptions[fieldName]
 	if !ok {
@@ -128,26 +112,6 @@ func anyValues[T any](values []T) []any {
 		out = append(out, value)
 	}
 	return out
-}
-
-func DefaultRuntimeConfig() RuntimeConfig {
-	return RuntimeConfig{
-		UniverseDomain:       DefaultUniverseDomain,
-		MaxRetries:           DefaultMaxRetries,
-		HTTPTimeout:          mustParseDuration("http_timeout", DefaultHTTPTimeout),
-		MaxBackoff:           mustParseDuration("max_backoff", DefaultMaxBackoff),
-		BackoffJitter:        mustParseDuration("backoff_jitter", DefaultBackoffJitter),
-		RetryStatuses:        slices.Clone(DefaultRetryStatuses),
-		MetricsInterval:      mustParseDuration("metrics_interval", DefaultMetricsInterval),
-		MetricsOffset:        mustParseDuration("metrics_offset", DefaultMetricsOffset),
-		MetricsIngest:        DefaultMetricsIngest,
-		FillMissing:          DefaultFillMissing,
-		DropDelegated:        DefaultDropDelegated,
-		AggregateDeltas:      DefaultAggregateDeltas,
-		DeltasTTL:            mustParseDuration("aggregate_deltas_ttl", DefaultDeltasTTL),
-		DescriptorTTL:        mustParseDuration("descriptor_cache_ttl", DefaultDescriptorTTL),
-		DescriptorGoogleOnly: DefaultDescriptorGoogleOnly,
-	}
 }
 
 func ParseDuration(name, raw string) (time.Duration, error) {
@@ -244,12 +208,4 @@ func (c RuntimeConfig) CreateMonitoringService(ctx context.Context) (*monitoring
 		return nil, fmt.Errorf("error creating Google Stackdriver Monitoring service: %w", err)
 	}
 	return service, nil
-}
-
-func mustParseDuration(name, raw string) time.Duration {
-	duration, err := ParseDuration(name, raw)
-	if err != nil {
-		panic(err)
-	}
-	return duration
 }
