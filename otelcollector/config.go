@@ -15,9 +15,10 @@ package otelcollector
 
 import (
 	"fmt"
-	"net/http"
+	"slices"
 	"time"
 
+	"github.com/prometheus-community/stackdriver_exporter/config"
 	prombridge "github.com/prometheus/opentelemetry-collector-bridge"
 )
 
@@ -48,43 +49,26 @@ var _ prombridge.Config = (*Config)(nil)
 
 func defaultConfig() *Config {
 	return &Config{
-		UniverseDomain:       "googleapis.com",
-		MaxRetries:           0,
-		HTTPTimeout:          "10s",
-		MaxBackoff:           "5s",
-		BackoffJitter:        "1s",
-		RetryStatuses:        []int{503},
-		MetricsInterval:      "5m",
-		MetricsOffset:        "0s",
-		MetricsIngest:        false,
-		FillMissing:          true,
-		DropDelegated:        false,
-		AggregateDeltas:      false,
-		DeltasTTL:            "30m",
-		DescriptorTTL:        "0s",
-		DescriptorGoogleOnly: true,
+		UniverseDomain:       config.DefaultUniverseDomain,
+		MaxRetries:           config.DefaultMaxRetries,
+		HTTPTimeout:          config.DefaultHTTPTimeout,
+		MaxBackoff:           config.DefaultMaxBackoff,
+		BackoffJitter:        config.DefaultBackoffJitter,
+		RetryStatuses:        slices.Clone(config.DefaultRetryStatuses),
+		MetricsInterval:      config.DefaultMetricsInterval,
+		MetricsOffset:        config.DefaultMetricsOffset,
+		MetricsIngest:        config.DefaultMetricsIngest,
+		FillMissing:          config.DefaultFillMissing,
+		DropDelegated:        config.DefaultDropDelegated,
+		AggregateDeltas:      config.DefaultAggregateDeltas,
+		DeltasTTL:            config.DefaultDeltasTTL,
+		DescriptorTTL:        config.DefaultDescriptorTTL,
+		DescriptorGoogleOnly: config.DefaultDescriptorGoogleOnly,
 	}
 }
 
 func defaultComponentDefaults() map[string]interface{} {
-	cfg := defaultConfig()
-	return map[string]interface{}{
-		"max_retries":                  cfg.MaxRetries,
-		"http_timeout":                 cfg.HTTPTimeout,
-		"max_backoff":                  cfg.MaxBackoff,
-		"backoff_jitter":               cfg.BackoffJitter,
-		"retry_statuses":               cfg.RetryStatuses,
-		"universe_domain":              cfg.UniverseDomain,
-		"metrics_interval":             cfg.MetricsInterval,
-		"metrics_offset":               cfg.MetricsOffset,
-		"metrics_ingest_delay":         cfg.MetricsIngest,
-		"fill_missing_labels":          cfg.FillMissing,
-		"drop_delegated_projects":      cfg.DropDelegated,
-		"aggregate_deltas":             cfg.AggregateDeltas,
-		"aggregate_deltas_ttl":         cfg.DeltasTTL,
-		"descriptor_cache_ttl":         cfg.DescriptorTTL,
-		"descriptor_cache_only_google": cfg.DescriptorGoogleOnly,
-	}
+	return config.OTelComponentDefaults()
 }
 
 func (c *Config) Validate() error {
@@ -97,10 +81,8 @@ func (c *Config) Validate() error {
 		return err
 	}
 
-	for _, code := range c.RetryStatuses {
-		if code < http.StatusContinue || code > 599 {
-			return fmt.Errorf("retry status %d is not a valid HTTP status code", code)
-		}
+	if err := config.ValidateRetryStatuses(c.RetryStatuses); err != nil {
+		return err
 	}
 
 	return nil
@@ -117,39 +99,31 @@ type parsedConfig struct {
 }
 
 func (c *Config) parsedDurations() (parsedConfig, error) {
-	parse := func(name, raw string) (time.Duration, error) {
-		d, err := time.ParseDuration(raw)
-		if err != nil {
-			return 0, fmt.Errorf("%s: invalid duration %q: %w", name, raw, err)
-		}
-		return d, nil
-	}
-
-	httpTimeout, err := parse("http_timeout", c.HTTPTimeout)
+	httpTimeout, err := config.ParseDuration("http_timeout", c.HTTPTimeout)
 	if err != nil {
 		return parsedConfig{}, err
 	}
-	maxBackoff, err := parse("max_backoff", c.MaxBackoff)
+	maxBackoff, err := config.ParseDuration("max_backoff", c.MaxBackoff)
 	if err != nil {
 		return parsedConfig{}, err
 	}
-	backoffJitter, err := parse("backoff_jitter", c.BackoffJitter)
+	backoffJitter, err := config.ParseDuration("backoff_jitter", c.BackoffJitter)
 	if err != nil {
 		return parsedConfig{}, err
 	}
-	metricsInterval, err := parse("metrics_interval", c.MetricsInterval)
+	metricsInterval, err := config.ParseDuration("metrics_interval", c.MetricsInterval)
 	if err != nil {
 		return parsedConfig{}, err
 	}
-	metricsOffset, err := parse("metrics_offset", c.MetricsOffset)
+	metricsOffset, err := config.ParseDuration("metrics_offset", c.MetricsOffset)
 	if err != nil {
 		return parsedConfig{}, err
 	}
-	deltasTTL, err := parse("aggregate_deltas_ttl", c.DeltasTTL)
+	deltasTTL, err := config.ParseDuration("aggregate_deltas_ttl", c.DeltasTTL)
 	if err != nil {
 		return parsedConfig{}, err
 	}
-	descriptorTTL, err := parse("descriptor_cache_ttl", c.DescriptorTTL)
+	descriptorTTL, err := config.ParseDuration("descriptor_cache_ttl", c.DescriptorTTL)
 	if err != nil {
 		return parsedConfig{}, err
 	}
@@ -162,6 +136,35 @@ func (c *Config) parsedDurations() (parsedConfig, error) {
 		MetricsOffset:   metricsOffset,
 		DeltasTTL:       deltasTTL,
 		DescriptorTTL:   descriptorTTL,
+	}, nil
+}
+
+func (c *Config) runtimeConfig() (config.RuntimeConfig, error) {
+	parsed, err := c.parsedDurations()
+	if err != nil {
+		return config.RuntimeConfig{}, err
+	}
+
+	return config.RuntimeConfig{
+		ProjectIDs:           slices.Clone(c.ProjectIDs),
+		ProjectsFilter:       c.ProjectsFilter,
+		UniverseDomain:       c.UniverseDomain,
+		MaxRetries:           c.MaxRetries,
+		HTTPTimeout:          parsed.HTTPTimeout,
+		MaxBackoff:           parsed.MaxBackoff,
+		BackoffJitter:        parsed.BackoffJitter,
+		RetryStatuses:        slices.Clone(c.RetryStatuses),
+		MetricsPrefixes:      slices.Clone(c.MetricsPrefixes),
+		MetricsInterval:      parsed.MetricsInterval,
+		MetricsOffset:        parsed.MetricsOffset,
+		MetricsIngest:        c.MetricsIngest,
+		FillMissing:          c.FillMissing,
+		DropDelegated:        c.DropDelegated,
+		Filters:              slices.Clone(c.Filters),
+		AggregateDeltas:      c.AggregateDeltas,
+		DeltasTTL:            parsed.DeltasTTL,
+		DescriptorTTL:        parsed.DescriptorTTL,
+		DescriptorGoogleOnly: c.DescriptorGoogleOnly,
 	}, nil
 }
 
