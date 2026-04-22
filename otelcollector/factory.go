@@ -14,8 +14,6 @@
 package otelcollector
 
 import (
-	"log/slog"
-
 	prombridge "github.com/prometheus/opentelemetry-collector-bridge"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/receiver"
@@ -26,7 +24,7 @@ var receiverType = component.MustNewType("stackdriver_exporter")
 func NewFactory() receiver.Factory {
 	return prombridge.NewFactory(
 		receiverType,
-		newLifecycleManager(slog.Default()),
+		newLifecycleManager(),
 		configUnmarshaler{},
 		prombridge.WithComponentDefaults(defaultComponentDefaults()),
 	)
