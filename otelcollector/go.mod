@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/prometheus-community/stackdriver_exporter v0.0.0
 	github.com/prometheus/client_golang v1.23.2
-	github.com/prometheus/opentelemetry-collector-bridge v0.0.0-20260420185709-98919ded11de
+	github.com/prometheus/opentelemetry-collector-bridge v0.0.0-20260423181221-8d9338897ca9
 	go.opentelemetry.io/collector/component v1.56.0
 	go.opentelemetry.io/collector/consumer/consumertest v0.150.0
 	go.opentelemetry.io/collector/receiver v1.56.0

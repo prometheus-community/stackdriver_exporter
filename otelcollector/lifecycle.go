@@ -99,7 +99,7 @@ func (m *lifecycleManager) Start(ctx context.Context, set receiver.Settings, exp
 	return registry, nil
 }
 
-func (m *lifecycleManager) Shutdown(context.Context, receiver.Settings) error {
+func (m *lifecycleManager) Shutdown(context.Context) error {
 	return nil
 }
 

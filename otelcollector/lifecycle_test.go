@@ -204,7 +204,7 @@ func TestLifecycleManager_Shutdown(t *testing.T) {
 	t.Parallel()
 
 	mgr := newLifecycleManager()
-	if err := mgr.Shutdown(context.Background(), receivertest.NewNopSettings(receiverType)); err != nil {
+	if err := mgr.Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown() error = %v", err)
 	}
 }
