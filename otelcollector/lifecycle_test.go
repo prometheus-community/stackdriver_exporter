@@ -25,6 +25,9 @@ import (
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
 	"github.com/prometheus-community/stackdriver_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/collector/receiver/receivertest"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/api/monitoring/v3"
 )
 
@@ -46,7 +49,7 @@ func TestLifecycleManager_Start(t *testing.T) {
 	var createdProjects []string
 	var gotOpts collectors.MonitoringCollectorOptions
 	var gotDeltasTTL time.Duration
-	mgr := newLifecycleManager(slog.Default())
+	mgr := newLifecycleManager()
 	mgr.monitoringServiceFactory = func(context.Context, config.RuntimeConfig) (*monitoring.Service, error) {
 		return &monitoring.Service{}, nil
 	}
@@ -60,7 +63,7 @@ func TestLifecycleManager_Start(t *testing.T) {
 		}), nil
 	}
 
-	reg, err := mgr.Start(context.Background(), cfg)
+	reg, err := mgr.Start(context.Background(), receivertest.NewNopSettings(receiverType), cfg)
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
@@ -95,6 +98,47 @@ func TestLifecycleManager_Start(t *testing.T) {
 	}
 }
 
+func TestLifecycleManager_Start_UsesCollectorLogger(t *testing.T) {
+	t.Parallel()
+
+	cfg := &Config{
+		ProjectIDs:      []string{"project-a"},
+		MetricsPrefixes: []string{"compute.googleapis.com/instance"},
+		HTTPTimeout:     "10s",
+		MaxBackoff:      "5s",
+		BackoffJitter:   "1s",
+		MetricsInterval: "5m",
+		MetricsOffset:   "0s",
+		DeltasTTL:       "30m",
+		DescriptorTTL:   "0s",
+	}
+
+	core, observed := observer.New(zap.DebugLevel)
+	settings := receivertest.NewNopSettings(receiverType)
+	settings.Logger = zap.New(core)
+
+	mgr := newLifecycleManager()
+	mgr.monitoringServiceFactory = func(context.Context, config.RuntimeConfig) (*monitoring.Service, error) {
+		return &monitoring.Service{}, nil
+	}
+	mgr.collectorFactory = func(projectID string, _ *monitoring.Service, _ collectors.MonitoringCollectorOptions, _ time.Duration, logger *slog.Logger) (prometheus.Collector, error) {
+		logger.Info("using collector logger", "project_id", projectID)
+		return prometheus.NewGauge(prometheus.GaugeOpts{Name: "collector_logger_metric", Help: "test"}), nil
+	}
+
+	if _, err := mgr.Start(context.Background(), settings, cfg); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+
+	entries := observed.FilterMessage("using collector logger").AllUntimed()
+	if len(entries) != 1 {
+		t.Fatalf("logged entries = %d, want 1", len(entries))
+	}
+	if got := entries[0].ContextMap()["project_id"]; got != "project-a" {
+		t.Fatalf("logged project_id = %#v, want %q", got, "project-a")
+	}
+}
+
 func TestLifecycleManager_Start_UsesDefaultProjectDiscovery(t *testing.T) {
 	t.Parallel()
 
@@ -109,7 +153,7 @@ func TestLifecycleManager_Start_UsesDefaultProjectDiscovery(t *testing.T) {
 		DescriptorTTL:   "0s",
 	}
 
-	mgr := newLifecycleManager(slog.Default())
+	mgr := newLifecycleManager()
 	mgr.defaultProjectDiscoverer = func(context.Context) (string, error) {
 		return "auto-project", nil
 	}
@@ -123,7 +167,7 @@ func TestLifecycleManager_Start_UsesDefaultProjectDiscovery(t *testing.T) {
 		return prometheus.NewGauge(prometheus.GaugeOpts{Name: "auto_project_metric", Help: "test"}), nil
 	}
 
-	if _, err := mgr.Start(context.Background(), cfg); err != nil {
+	if _, err := mgr.Start(context.Background(), receivertest.NewNopSettings(receiverType), cfg); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
 }
@@ -143,7 +187,7 @@ func TestLifecycleManager_Start_ReturnsErrorFromCollectorFactory(t *testing.T) {
 		DescriptorTTL:   "0s",
 	}
 
-	mgr := newLifecycleManager(slog.Default())
+	mgr := newLifecycleManager()
 	mgr.monitoringServiceFactory = func(context.Context, config.RuntimeConfig) (*monitoring.Service, error) {
 		return &monitoring.Service{}, nil
 	}
@@ -151,7 +195,7 @@ func TestLifecycleManager_Start_ReturnsErrorFromCollectorFactory(t *testing.T) {
 		return nil, errors.New("boom")
 	}
 
-	if _, err := mgr.Start(context.Background(), cfg); err == nil {
+	if _, err := mgr.Start(context.Background(), receivertest.NewNopSettings(receiverType), cfg); err == nil {
 		t.Fatal("Start() expected error, got nil")
 	}
 }
@@ -159,7 +203,7 @@ func TestLifecycleManager_Start_ReturnsErrorFromCollectorFactory(t *testing.T) {
 func TestLifecycleManager_Shutdown(t *testing.T) {
 	t.Parallel()
 
-	mgr := newLifecycleManager(slog.Default())
+	mgr := newLifecycleManager()
 	if err := mgr.Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown() error = %v", err)
 	}
