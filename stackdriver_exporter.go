@@ -53,6 +53,10 @@ var (
 		"web.stackdriver-telemetry-path", "Path under which to expose Stackdriver metrics.",
 	).Default("/metrics").String()
 
+	healthCheckPath = kingpin.Flag(
+		"web.health-check-path", "Path under which to expose health check.",
+	).Default("/health").String()
+
 	projectID = kingpin.Flag(
 		"google.project-id", "DEPRECATED - Comma seperated list of Google Project IDs. Use 'google.project-ids' instead.",
 	).String()
@@ -257,6 +261,8 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
+	http.HandleFunc(*healthCheckPath, healthCheckHandler)
+
 	logger := promslog.New(promslogConfig)
 	if *projectID != "" {
 		logger.Warn("The google.project-id flag is deprecated and will be replaced by google.project-ids.")
@@ -396,4 +402,9 @@ func defaultRetryStatuses() []string {
 		defaults = append(defaults, strconv.Itoa(status))
 	}
 	return defaults
+}
+
+func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
