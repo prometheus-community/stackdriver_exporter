@@ -14,23 +14,38 @@
 package collectors
 
 import (
+	"regexp"
+	"sort"
+	"strings"
 	"time"
 
+	"github.com/fatih/camelcase"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/api/monitoring/v3"
 
-	"sort"
-
 	"github.com/prometheus-community/stackdriver_exporter/hash"
-	"github.com/prometheus-community/stackdriver_exporter/utils"
 )
+
+var safeNameRE = regexp.MustCompile(`[^a-zA-Z0-9_]*$`)
 
 func buildFQName(timeSeries *monitoring.TimeSeries) string {
 	// The metric name to report is composed by the 3 parts:
 	// 1. namespace is a constant prefix (stackdriver)
 	// 2. subsystem is the monitored resource type (ie gce_instance)
 	// 3. name is the metric type (ie compute.googleapis.com/instance/cpu/usage_time)
-	return prometheus.BuildFQName(namespace, utils.NormalizeMetricName(timeSeries.Resource.Type), utils.NormalizeMetricName(timeSeries.Metric.Type))
+	return prometheus.BuildFQName(namespace, normalizeMetricName(timeSeries.Resource.Type), normalizeMetricName(timeSeries.Metric.Type))
+}
+
+func normalizeMetricName(metricName string) string {
+	var parts []string
+	for _, word := range camelcase.Split(metricName) {
+		safe := strings.Trim(safeNameRE.ReplaceAllLiteralString(word, "_"), "_")
+		lower := strings.TrimSpace(strings.ToLower(safe))
+		if lower != "" {
+			parts = append(parts, lower)
+		}
+	}
+	return strings.Join(parts, "_")
 }
 
 type timeSeriesMetrics struct {

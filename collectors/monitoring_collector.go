@@ -25,8 +25,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/api/monitoring/v3"
-
-	"github.com/prometheus-community/stackdriver_exporter/utils"
 )
 
 const namespace = "stackdriver"
@@ -39,7 +37,7 @@ type MetricFilter struct {
 func ParseMetricExtraFilters(raw []string) []MetricFilter {
 	out := make([]MetricFilter, 0, len(raw))
 	for _, entry := range raw {
-		prefix, filter := utils.SplitExtraFilter(entry, ":")
+		prefix, filter := splitExtraFilter(entry, ":")
 		if prefix == "" {
 			continue
 		}
@@ -49,6 +47,18 @@ func ParseMetricExtraFilters(raw []string) []MetricFilter {
 		})
 	}
 	return out
+}
+
+func splitExtraFilter(extraFilter string, separator string) (string, string) {
+	mPrefix := strings.SplitN(extraFilter, separator, 2)
+	if len(mPrefix) != 2 {
+		return "", ""
+	}
+	return mPrefix[0], mPrefix[1]
+}
+
+func projectResource(projectID string) string {
+	return "projects/" + projectID
 }
 
 type MonitoringCollector struct {
@@ -329,7 +339,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 
 				c.logger.Debug("retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
 
-				timeSeriesListCall := c.monitoringService.Projects.TimeSeries.List(utils.ProjectResource(c.projectID)).
+				timeSeriesListCall := c.monitoringService.Projects.TimeSeries.List(projectResource(c.projectID)).
 					Filter(filter).
 					IntervalStartTime(startTime.Format(time.RFC3339Nano)).
 					IntervalEndTime(endTime.Format(time.RFC3339Nano))
@@ -396,7 +406,7 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				}
 
 				c.logger.Debug("listing Google Stackdriver Monitoring metric descriptors starting with", "prefix", metricsTypePrefix)
-				if err := c.monitoringService.Projects.MetricDescriptors.List(utils.ProjectResource(c.projectID)).
+				if err := c.monitoringService.Projects.MetricDescriptors.List(projectResource(c.projectID)).
 					Filter(filter).
 					Pages(ctx, callback); err != nil {
 					errChannel <- err

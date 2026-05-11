@@ -64,3 +64,52 @@ func TestParseMetricExtraFilters(t *testing.T) {
 		t.Fatalf("ParseMetricExtraFilters() = %#v, want %#v", got, want)
 	}
 }
+
+func TestSplitExtraFilter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		input      string
+		wantPrefix string
+		wantFilter string
+	}{
+		{
+			name:       "incomplete filter returns empty",
+			input:      "This_is__a-MetricName.Example/with/no/filter",
+			wantPrefix: "",
+			wantFilter: "",
+		},
+		{
+			name:       "basic filter",
+			input:      "This_is__a-MetricName.Example/with:filter.name=filter_value",
+			wantPrefix: "This_is__a-MetricName.Example/with",
+			wantFilter: "filter.name=filter_value",
+		},
+		{
+			name:       "filter value containing the separator",
+			input:      `This_is__a-MetricName.Example/with:filter.name="filter:value"`,
+			wantPrefix: "This_is__a-MetricName.Example/with",
+			wantFilter: `filter.name="filter:value"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotPrefix, gotFilter := splitExtraFilter(tt.input, ":")
+			if gotPrefix != tt.wantPrefix || gotFilter != tt.wantFilter {
+				t.Fatalf("splitExtraFilter() = (%q, %q), want (%q, %q)", gotPrefix, gotFilter, tt.wantPrefix, tt.wantFilter)
+			}
+		})
+	}
+}
+
+func TestProjectResource(t *testing.T) {
+	t.Parallel()
+
+	if got := projectResource("fake-project-1"); got != "projects/fake-project-1" {
+		t.Fatalf("projectResource() = %q, want %q", got, "projects/fake-project-1")
+	}
+}
