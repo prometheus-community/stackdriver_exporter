@@ -47,10 +47,7 @@ type Runtime struct {
 }
 
 // NewRuntime resolves project IDs and creates the monitoring service. The
-// caller must have run cfg.Validate first; this is enforced rather than
-// duplicated so the validation logic lives in one place and embeddings (e.g.
-// the OTel bridge framework, which calls Validate via type assertion as part
-// of receiver lifecycle) don't run it twice.
+// caller must have run cfg.Validate first.
 //
 // counterFactory and histogramFactory are invoked each time a new collector
 // is built. The returned Runtime does not cache collectors; call WithCache

@@ -13,8 +13,7 @@
 
 // Package config is the pure value-type definition of the stackdriver_exporter
 // configuration. It has no dependencies on the collectors package or any GCP
-// client libraries so that callers (CLI, OTel receiver, automation) can build
-// and validate a Config without pulling in the runtime stack.
+// client libraries.
 package config
 
 import (
@@ -64,9 +63,7 @@ type Config struct {
 	DescriptorCacheTTL        time.Duration
 	DescriptorCacheOnlyGoogle bool
 
-	// validated is set by Validate on success. Consumers like collectors.NewRuntime
-	// require it as a precondition so the validation logic lives in one place
-	// without each consumer having to re-run the checks.
+	// validated is set by Validate on success.
 	validated bool
 }
 
@@ -94,8 +91,7 @@ func NewConfigWithDefaults() *Config {
 }
 
 // Validate reports configuration errors that prevent the exporter from starting
-// and marks the Config as validated so consumers (e.g. collectors.NewRuntime)
-// can verify the caller has run it.
+// and marks the Config as validated.
 func (c *Config) Validate() error {
 	if len(c.MetricsPrefixes) == 0 {
 		return fmt.Errorf("metrics_prefixes must have at least one entry")
