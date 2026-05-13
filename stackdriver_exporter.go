@@ -257,8 +257,6 @@ func main() {
 		"projectsFilter", cfg.ProjectsFilter,
 	)
 
-	// Validate up front so CLI users get a clean error before any GCP client
-	// setup. NewRuntime also calls Validate so embedded callers don't have to.
 	if err := cfg.Validate(); err != nil {
 		logger.Error("invalid configuration", "err", err)
 		os.Exit(1)

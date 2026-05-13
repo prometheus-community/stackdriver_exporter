@@ -14,12 +14,28 @@
 package collectors
 
 import (
+	"context"
+	"log/slog"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/prometheus-community/stackdriver_exporter/config"
 )
+
+func TestNewRuntimeRequiresValidatedConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{MetricsPrefixes: []string{"compute.googleapis.com/"}}
+	_, err := NewRuntime(context.Background(), slog.Default(), cfg, nil, nil)
+	if err == nil {
+		t.Fatal("expected error for un-Validated config, got nil")
+	}
+	if !strings.Contains(err.Error(), "validated") {
+		t.Fatalf("expected error to mention validation, got %v", err)
+	}
+}
 
 func TestDeduplicateProjectIDs(t *testing.T) {
 	t.Parallel()

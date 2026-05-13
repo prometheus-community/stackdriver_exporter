@@ -46,13 +46,18 @@ type Runtime struct {
 	cache                 *collectorCache
 }
 
-// NewRuntime validates the config, resolves project IDs, and creates the
-// monitoring service. counterFactory and histogramFactory are invoked each
-// time a new collector is built. The returned Runtime does not cache
-// collectors; call WithCache to derive a sibling that does.
+// NewRuntime resolves project IDs and creates the monitoring service. The
+// caller must have run cfg.Validate first; this is enforced rather than
+// duplicated so the validation logic lives in one place and embeddings (e.g.
+// the OTel bridge framework, which calls Validate via type assertion as part
+// of receiver lifecycle) don't run it twice.
+//
+// counterFactory and histogramFactory are invoked each time a new collector
+// is built. The returned Runtime does not cache collectors; call WithCache
+// to derive a sibling that does.
 func NewRuntime(ctx context.Context, logger *slog.Logger, cfg *config.Config, counterFactory CounterStoreFactory, histogramFactory HistogramStoreFactory) (*Runtime, error) {
-	if err := cfg.Validate(); err != nil {
-		return nil, err
+	if !cfg.Validated() {
+		return nil, fmt.Errorf("config has not been validated; call cfg.Validate before NewRuntime")
 	}
 
 	var projectIDs []string

@@ -43,7 +43,19 @@ func TestValidate(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Validate() err = %v, wantErr = %v", err, tt.wantErr)
 			}
+			if got := tt.cfg.Validated(); got != (err == nil) {
+				t.Fatalf("Validated() = %v after Validate err = %v; want %v", got, err, err == nil)
+			}
 		})
+	}
+}
+
+func TestValidatedDefaultsFalse(t *testing.T) {
+	t.Parallel()
+
+	c := Config{}
+	if c.Validated() {
+		t.Fatal("Validated() = true on fresh Config; expected false until Validate is called")
 	}
 }
 

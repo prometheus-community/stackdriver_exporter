@@ -63,6 +63,11 @@ type Config struct {
 	AggregateDeltasTTL        time.Duration
 	DescriptorCacheTTL        time.Duration
 	DescriptorCacheOnlyGoogle bool
+
+	// validated is set by Validate on success. Consumers like collectors.NewRuntime
+	// require it as a precondition so the validation logic lives in one place
+	// without each consumer having to re-run the checks.
+	validated bool
 }
 
 // NewConfigWithDefaults returns a Config populated with package defaults. Fields
@@ -88,10 +93,18 @@ func NewConfigWithDefaults() *Config {
 	}
 }
 
-// Validate reports configuration errors that prevent the exporter from starting.
+// Validate reports configuration errors that prevent the exporter from starting
+// and marks the Config as validated so consumers (e.g. collectors.NewRuntime)
+// can verify the caller has run it.
 func (c *Config) Validate() error {
 	if len(c.MetricsPrefixes) == 0 {
 		return fmt.Errorf("metrics_prefixes must have at least one entry")
 	}
+	c.validated = true
 	return nil
+}
+
+// Validated reports whether Validate has been called successfully on c.
+func (c *Config) Validated() bool {
+	return c.validated
 }
