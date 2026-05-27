@@ -11,16 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package utils_test
+package collectors
 
-import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+import "testing"
 
-	"testing"
-)
+func TestNormalizeMetricName(t *testing.T) {
+	t.Parallel()
 
-func TestUtils(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Utils Suite")
+	got := normalizeMetricName("This_is__a-MetricName.Example/with:0totals")
+	want := "this_is_a_metric_name_example_with_0_totals"
+	if got != want {
+		t.Fatalf("normalizeMetricName() = %q, want %q", got, want)
+	}
 }

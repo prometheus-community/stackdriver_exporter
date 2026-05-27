@@ -73,22 +73,22 @@ func (d *descriptorCache) Store(prefix string, data []*monitoring.MetricDescript
 	d.cache[prefix] = &entry
 }
 
-// collectorCache is a cache for MonitoringCollectors
-type CollectorCache struct {
+// collectorCache caches MonitoringCollectors keyed by (project, prefix-filter)
+// for the duration of the configured TTL. It exists so HTTP scrape paths that
+// rebuild per request can preserve delta-counter state across calls.
+type collectorCache struct {
 	cache map[string]*collectorCacheEntry
 	lock  sync.RWMutex
 	ttl   time.Duration
 }
 
-// collectorCacheEntry is a cache entry for a MonitoringCollector
 type collectorCacheEntry struct {
 	collector *MonitoringCollector
 	expiry    time.Time
 }
 
-// NewCollectorCache returns a new CollectorCache with the given TTL
-func NewCollectorCache(ttl time.Duration) *CollectorCache {
-	c := &CollectorCache{
+func newCollectorCache(ttl time.Duration) *collectorCache {
+	c := &collectorCache{
 		cache: make(map[string]*collectorCacheEntry),
 		ttl:   ttl,
 	}
@@ -97,9 +97,8 @@ func NewCollectorCache(ttl time.Duration) *CollectorCache {
 	return c
 }
 
-// Get returns a MonitoringCollector if the key is found and not expired
-// If key is found it resets the TTL for the collector
-func (c *CollectorCache) Get(key string) (*MonitoringCollector, bool) {
+// Get returns the cached collector for key, refreshing its TTL on hit.
+func (c *collectorCache) Get(key string) (*MonitoringCollector, bool) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
@@ -118,7 +117,7 @@ func (c *CollectorCache) Get(key string) (*MonitoringCollector, bool) {
 	return entry.collector, true
 }
 
-func (c *CollectorCache) Store(key string, collector *MonitoringCollector) {
+func (c *collectorCache) Store(key string, collector *MonitoringCollector) {
 	entry := &collectorCacheEntry{
 		collector: collector,
 		expiry:    time.Now().Add(c.ttl),
@@ -129,7 +128,7 @@ func (c *CollectorCache) Store(key string, collector *MonitoringCollector) {
 	c.cache[key] = entry
 }
 
-func (c *CollectorCache) cleanup() {
+func (c *collectorCache) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	for range ticker.C {
@@ -137,7 +136,7 @@ func (c *CollectorCache) cleanup() {
 	}
 }
 
-func (c *CollectorCache) removeExpired() {
+func (c *collectorCache) removeExpired() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 

@@ -32,12 +32,10 @@ import (
 	"github.com/prometheus/common/version"
 	"github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
-	"google.golang.org/api/monitoring/v3"
 
 	"github.com/prometheus-community/stackdriver_exporter/collectors"
 	"github.com/prometheus-community/stackdriver_exporter/config"
 	"github.com/prometheus-community/stackdriver_exporter/delta"
-	"github.com/prometheus-community/stackdriver_exporter/utils"
 )
 
 var (
@@ -58,35 +56,35 @@ var (
 	).String()
 
 	projectIDs = kingpin.Flag(
-		config.ProjectIDs.CLIFlag, "Repeatable flag of Google Project IDs",
+		"google.project-ids", "Repeatable flag of Google Project IDs",
 	).Strings()
 
 	projectsFilter = kingpin.Flag(
-		config.ProjectsFilter.CLIFlag, "Google projects search filter.",
+		"google.projects.filter", "Google projects search filter.",
 	).String()
 
 	googleUniverseDomain = kingpin.Flag(
-		config.UniverseDomain.CLIFlag, "The Cloud universe to use.",
+		"google.universe-domain", "The Cloud universe to use.",
 	).Default(config.DefaultUniverseDomain).String()
 
 	stackdriverMaxRetries = kingpin.Flag(
-		config.MaxRetries.CLIFlag, "Max number of retries that should be attempted on 503 errors from stackdriver.",
+		"stackdriver.max-retries", "Max number of retries that should be attempted on 503 errors from stackdriver.",
 	).Default(strconv.Itoa(config.DefaultMaxRetries)).Int()
 
 	stackdriverHttpTimeout = kingpin.Flag(
-		config.HTTPTimeout.CLIFlag, "How long should stackdriver_exporter wait for a result from the Stackdriver API.",
-	).Default(config.DefaultHTTPTimeout).Duration()
+		"stackdriver.http-timeout", "How long should stackdriver_exporter wait for a result from the Stackdriver API.",
+	).Default(config.DefaultHTTPTimeout.String()).Duration()
 
 	stackdriverMaxBackoffDuration = kingpin.Flag(
-		config.MaxBackoff.CLIFlag, "Max time between each request in an exp backoff scenario.",
-	).Default(config.DefaultMaxBackoff).Duration()
+		"stackdriver.max-backoff", "Max time between each request in an exp backoff scenario.",
+	).Default(config.DefaultMaxBackoff.String()).Duration()
 
 	stackdriverBackoffJitterBase = kingpin.Flag(
-		config.BackoffJitter.CLIFlag, "The amount of jitter to introduce in a exp backoff scenario.",
-	).Default(config.DefaultBackoffJitter).Duration()
+		"stackdriver.backoff-jitter", "The amount of jitter to introduce in a exp backoff scenario.",
+	).Default(config.DefaultBackoffJitter.String()).Duration()
 
 	stackdriverRetryStatuses = kingpin.Flag(
-		config.RetryStatuses.CLIFlag, "The HTTP statuses that should trigger a retry.",
+		"stackdriver.retry-statuses", "The HTTP statuses that should trigger a retry.",
 	).Default(defaultRetryStatuses()...).Ints()
 
 	// Monitoring collector flags
@@ -95,48 +93,48 @@ var (
 	).String()
 
 	monitoringMetricsPrefixes = kingpin.Flag(
-		config.MetricsPrefixes.CLIFlag, "Google Stackdriver Monitoring Metric Type prefixes. Repeat this flag to scrape multiple prefixes.",
+		"monitoring.metrics-prefixes", "Google Stackdriver Monitoring Metric Type prefixes. Repeat this flag to scrape multiple prefixes.",
 	).Strings()
 
 	monitoringMetricsInterval = kingpin.Flag(
-		config.MetricsInterval.CLIFlag, "Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used.",
-	).Default(config.DefaultMetricsInterval).Duration()
+		"monitoring.metrics-interval", "Interval to request the Google Stackdriver Monitoring Metrics for. Only the most recent data point is used.",
+	).Default(config.DefaultMetricsInterval.String()).Duration()
 
 	monitoringMetricsOffset = kingpin.Flag(
-		config.MetricsOffset.CLIFlag, "Offset for the Google Stackdriver Monitoring Metrics interval into the past.",
-	).Default(config.DefaultMetricsOffset).Duration()
+		"monitoring.metrics-offset", "Offset for the Google Stackdriver Monitoring Metrics interval into the past.",
+	).Default(config.DefaultMetricsOffset.String()).Duration()
 
 	monitoringMetricsIngestDelay = kingpin.Flag(
-		config.MetricsIngest.CLIFlag, "Offset for the Google Stackdriver Monitoring Metrics interval into the past by the ingest delay from the metric's metadata.",
+		"monitoring.metrics-ingest-delay", "Offset for the Google Stackdriver Monitoring Metrics interval into the past by the ingest delay from the metric's metadata.",
 	).Default(strconv.FormatBool(config.DefaultMetricsIngest)).Bool()
 
 	collectorFillMissingLabels = kingpin.Flag(
-		config.FillMissing.CLIFlag, "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure.",
+		"collector.fill-missing-labels", "Fill missing metrics labels with empty string to avoid label dimensions inconsistent failure.",
 	).Default(strconv.FormatBool(config.DefaultFillMissing)).Bool()
 
 	monitoringDropDelegatedProjects = kingpin.Flag(
-		config.DropDelegated.CLIFlag, "Drop metrics from attached projects and fetch `project_id` only.",
+		"monitoring.drop-delegated-projects", "Drop metrics from attached projects and fetch `project_id` only.",
 	).Default(strconv.FormatBool(config.DefaultDropDelegated)).Bool()
 
 	monitoringMetricsExtraFilter = kingpin.Flag(
-		config.Filters.CLIFlag,
+		"monitoring.filters",
 		"Filters. i.e: pubsub.googleapis.com/subscription:resource.labels.subscription_id=monitoring.regex.full_match(\"my-subs-prefix.*\")",
 	).Strings()
 
 	monitoringMetricsAggregateDeltas = kingpin.Flag(
-		config.AggregateDeltas.CLIFlag, "If enabled will treat all DELTA metrics as an in-memory counter instead of a gauge",
+		"monitoring.aggregate-deltas", "If enabled will treat all DELTA metrics as an in-memory counter instead of a gauge",
 	).Default(strconv.FormatBool(config.DefaultAggregateDeltas)).Bool()
 
 	monitoringMetricsDeltasTTL = kingpin.Flag(
-		config.DeltasTTL.CLIFlag, "How long should a delta metric continue to be exported after GCP stops producing a metric",
-	).Default(config.DefaultDeltasTTL).Duration()
+		"monitoring.aggregate-deltas-ttl", "How long should a delta metric continue to be exported after GCP stops producing a metric",
+	).Default(config.DefaultDeltasTTL.String()).Duration()
 
 	monitoringDescriptorCacheTTL = kingpin.Flag(
-		config.DescriptorTTL.CLIFlag, "How long should the metric descriptors for a prefixed be cached for",
-	).Default(config.DefaultDescriptorTTL).Duration()
+		"monitoring.descriptor-cache-ttl", "How long should the metric descriptors for a prefixed be cached for",
+	).Default(config.DefaultDescriptorTTL.String()).Duration()
 
 	monitoringDescriptorCacheOnlyGoogle = kingpin.Flag(
-		config.DescriptorGoogleOnly.CLIFlag, "Only cache descriptors for *.googleapis.com metrics",
+		"monitoring.descriptor-cache-only-google", "Only cache descriptors for *.googleapis.com metrics",
 	).Default(strconv.FormatBool(config.DefaultDescriptorGoogleOnly)).Bool()
 )
 
@@ -145,14 +143,10 @@ func init() {
 }
 
 type handler struct {
-	handler http.Handler
-	logger  *slog.Logger
-
-	projectIDs         []string
-	cfg                config.RuntimeConfig
+	handler            http.Handler
+	logger             *slog.Logger
+	runtime            *collectors.Runtime
 	additionalGatherer prometheus.Gatherer
-	m                  *monitoring.Service
-	collectors         *collectors.CollectorCache
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -163,63 +157,59 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(filters) > 0 {
-		h.innerHandler(filters).ServeHTTP(w, r)
+		handler, err := h.filteredHandler(filters)
+		if err != nil {
+			h.logger.Error("error creating monitoring collector", "err", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		handler.ServeHTTP(w, r)
 		return
 	}
 
 	h.handler.ServeHTTP(w, r)
 }
 
-func newHandler(projectIDs []string, cfg config.RuntimeConfig, m *monitoring.Service, logger *slog.Logger, additionalGatherer prometheus.Gatherer) *handler {
-	logger.Info("Creating collector cache", "ttl", cfg.CollectorCacheTTL())
-
+func newHandler(runtime *collectors.Runtime, logger *slog.Logger, additionalGatherer prometheus.Gatherer) (*handler, error) {
 	h := &handler{
 		logger:             logger,
-		projectIDs:         projectIDs,
-		cfg:                cfg,
+		runtime:            runtime,
 		additionalGatherer: additionalGatherer,
-		m:                  m,
-		collectors:         collectors.NewCollectorCache(cfg.CollectorCacheTTL()),
 	}
 
-	h.handler = h.innerHandler(nil)
-	return h
+	cs, err := runtime.Collectors()
+	if err != nil {
+		return nil, fmt.Errorf("build collectors: %w", err)
+	}
+	registry := prometheus.NewRegistry()
+	for _, c := range cs {
+		if err := registry.Register(c); err != nil {
+			return nil, fmt.Errorf("register collector: %w", err)
+		}
+	}
+	h.handler = h.handlerFor(registry)
+	return h, nil
 }
 
-func (h *handler) getCollector(project string, filters map[string]bool) (*collectors.MonitoringCollector, error) {
-	filterdPrefixes := h.filterMetricTypePrefixes(filters)
-	collectorKey := fmt.Sprintf("%s-%v", project, filterdPrefixes)
-
-	if collector, found := h.collectors.Get(collectorKey); found {
-		return collector, nil
+func (h *handler) filteredHandler(filters map[string]bool) (http.Handler, error) {
+	prefixFilter := make([]string, 0, len(filters))
+	for f := range filters {
+		prefixFilter = append(prefixFilter, f)
 	}
+	slices.Sort(prefixFilter)
 
-	collector, err := collectors.NewMonitoringCollector(
-		project,
-		h.m,
-		h.cfg.MonitoringCollectorOptionsForPrefixes(filterdPrefixes),
-		h.logger,
-		delta.NewInMemoryCounterStore(h.logger, h.cfg.DeltasTTL),
-		delta.NewInMemoryHistogramStore(h.logger, h.cfg.DeltasTTL),
-	)
+	cs, err := h.runtime.CollectorsForPrefixes(prefixFilter)
 	if err != nil {
 		return nil, err
 	}
-	h.collectors.Store(collectorKey, collector)
-	return collector, nil
+	registry := prometheus.NewRegistry()
+	for _, c := range cs {
+		registry.MustRegister(c)
+	}
+	return h.handlerFor(registry), nil
 }
 
-func (h *handler) innerHandler(filters map[string]bool) http.Handler {
-	registry := prometheus.NewRegistry()
-
-	for _, project := range h.projectIDs {
-		monitoringCollector, err := h.getCollector(project, filters)
-		if err != nil {
-			h.logger.Error("error creating monitoring collector", "err", err)
-			os.Exit(1)
-		}
-		registry.MustRegister(monitoringCollector)
-	}
+func (h *handler) handlerFor(registry *prometheus.Registry) http.Handler {
 	var gatherers prometheus.Gatherer = registry
 	if h.additionalGatherer != nil {
 		gatherers = prometheus.Gatherers{
@@ -228,25 +218,7 @@ func (h *handler) innerHandler(filters map[string]bool) http.Handler {
 		}
 	}
 	opts := promhttp.HandlerOpts{ErrorLog: slog.NewLogLogger(h.logger.Handler(), slog.LevelError)}
-	// Delegate http serving to Prometheus client library, which will call collector.Collect.
 	return promhttp.HandlerFor(gatherers, opts)
-}
-
-// filterMetricTypePrefixes filters the initial list of metric type prefixes, with the ones coming from an individual
-// prometheus collect request.
-func (h *handler) filterMetricTypePrefixes(filters map[string]bool) []string {
-	filteredPrefixes := h.cfg.MetricsPrefixes
-	if len(filters) > 0 {
-		filteredPrefixes = nil
-		for _, prefix := range h.cfg.MetricsPrefixes {
-			for filter := range filters {
-				if strings.HasPrefix(filter, prefix) {
-					filteredPrefixes = append(filteredPrefixes, filter)
-				}
-			}
-		}
-	}
-	return config.ParseMetricPrefixes(filteredPrefixes)
 }
 
 func main() {
@@ -264,70 +236,54 @@ func main() {
 	if *monitoringMetricsTypePrefixes != "" {
 		logger.Warn("The monitoring.metrics-type-prefixes flag is deprecated and will be replaced by monitoring.metrics-prefix.")
 	}
-	if *monitoringMetricsTypePrefixes == "" && len(*monitoringMetricsPrefixes) == 0 {
-		logger.Error("At least one GCP monitoring prefix is required.")
-		os.Exit(1)
-	}
-
 	ctx := context.Background()
-	runtimeCfg := collectorRuntimeConfigFromFlags()
-	var discoveredProjectIDs []string
 
-	if len(runtimeCfg.ProjectIDs) == 0 && *projectID == "" && runtimeCfg.ProjectsFilter == "" {
-		logger.Info("Neither projectIDs nor projectsFilter was provided. Trying to discover it")
-		defaultProject, err := config.DiscoverDefaultProjectID(ctx)
-		if err != nil {
-			logger.Error("no explicit projectIDs and error trying to discover default GCloud project", "err", err)
-			os.Exit(1)
-		}
-		discoveredProjectIDs = append(discoveredProjectIDs, defaultProject)
-	}
+	cfg := collectorConfigFromFlags()
 
-	monitoringService, err := runtimeCfg.CreateMonitoringService(ctx)
-	if err != nil {
-		logger.Error("failed to create monitoring service", "err", err)
-		os.Exit(1)
-	}
-
-	if runtimeCfg.ProjectsFilter != "" {
-		projectIDsFromFilter, err := utils.GetProjectIDsFromFilter(ctx, runtimeCfg.ProjectsFilter)
-		if err != nil {
-			logger.Error("failed to get project IDs from filter", "err", err)
-			os.Exit(1)
-		}
-		discoveredProjectIDs = append(discoveredProjectIDs, projectIDsFromFilter...)
-	}
-
-	if len(runtimeCfg.ProjectIDs) > 0 {
-		discoveredProjectIDs = append(discoveredProjectIDs, runtimeCfg.ProjectIDs...)
-	}
 	if *projectID != "" {
-		discoveredProjectIDs = append(discoveredProjectIDs, strings.Split(*projectID, ",")...)
+		cfg.ProjectIDs = append(cfg.ProjectIDs, strings.Split(*projectID, ",")...)
 	}
-
 	if *monitoringMetricsTypePrefixes != "" {
-		runtimeCfg.MetricsPrefixes = append(runtimeCfg.MetricsPrefixes, strings.Split(*monitoringMetricsTypePrefixes, ",")...)
+		cfg.MetricsPrefixes = append(cfg.MetricsPrefixes, strings.Split(*monitoringMetricsTypePrefixes, ",")...)
 	}
 
 	logger.Info(
 		"Starting stackdriver_exporter",
 		"version", version.Info(),
 		"build_context", version.BuildContext(),
-		"metric_prefixes", fmt.Sprintf("%v", runtimeCfg.MetricsPrefixes),
-		"extra_filters", strings.Join(runtimeCfg.Filters, ","),
-		"projectIDs", fmt.Sprintf("%v", discoveredProjectIDs),
-		"projectsFilter", runtimeCfg.ProjectsFilter,
+		"metric_prefixes", fmt.Sprintf("%v", cfg.MetricsPrefixes),
+		"extra_filters", strings.Join(cfg.Filters, ","),
+		"projectIDs", fmt.Sprintf("%v", cfg.ProjectIDs),
+		"projectsFilter", cfg.ProjectsFilter,
 	)
 
-	uniqueProjectIds := config.DeduplicateProjectIDs(discoveredProjectIDs)
+	if err := cfg.Validate(); err != nil {
+		logger.Error("invalid configuration", "err", err)
+		os.Exit(1)
+	}
+
+	runtime, err := collectors.NewRuntime(ctx, logger, cfg, delta.NewInMemoryCounterStore, delta.NewInMemoryHistogramStore)
+	if err != nil {
+		logger.Error("failed to initialize", "err", err)
+		os.Exit(1)
+	}
+	runtime = runtime.WithCache()
 
 	if *metricsPath == *stackdriverMetricsPath {
-		handler := newHandler(uniqueProjectIds, runtimeCfg, monitoringService, logger, prometheus.DefaultGatherer)
-		http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
+		h, err := newHandler(runtime, logger, prometheus.DefaultGatherer)
+		if err != nil {
+			logger.Error("failed to build handler", "err", err)
+			os.Exit(1)
+		}
+		http.Handle(*metricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, h))
 	} else {
 		logger.Info("Serving Stackdriver metrics at separate path", "path", *stackdriverMetricsPath)
-		handler := newHandler(uniqueProjectIds, runtimeCfg, monitoringService, logger, nil)
-		http.Handle(*stackdriverMetricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler))
+		h, err := newHandler(runtime, logger, nil)
+		if err != nil {
+			logger.Error("failed to build handler", "err", err)
+			os.Exit(1)
+		}
+		http.Handle(*stackdriverMetricsPath, promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, h))
 		http.Handle(*metricsPath, promhttp.Handler())
 	}
 
@@ -366,27 +322,27 @@ func main() {
 	}
 }
 
-func collectorRuntimeConfigFromFlags() config.RuntimeConfig {
-	return config.RuntimeConfig{
-		ProjectIDs:           slices.Clone(*projectIDs),
-		ProjectsFilter:       *projectsFilter,
-		UniverseDomain:       *googleUniverseDomain,
-		MaxRetries:           *stackdriverMaxRetries,
-		HTTPTimeout:          *stackdriverHttpTimeout,
-		MaxBackoff:           *stackdriverMaxBackoffDuration,
-		BackoffJitter:        *stackdriverBackoffJitterBase,
-		RetryStatuses:        slices.Clone(*stackdriverRetryStatuses),
-		MetricsPrefixes:      slices.Clone(*monitoringMetricsPrefixes),
-		MetricsInterval:      *monitoringMetricsInterval,
-		MetricsOffset:        *monitoringMetricsOffset,
-		MetricsIngest:        *monitoringMetricsIngestDelay,
-		FillMissing:          *collectorFillMissingLabels,
-		DropDelegated:        *monitoringDropDelegatedProjects,
-		Filters:              slices.Clone(*monitoringMetricsExtraFilter),
-		AggregateDeltas:      *monitoringMetricsAggregateDeltas,
-		DeltasTTL:            *monitoringMetricsDeltasTTL,
-		DescriptorTTL:        *monitoringDescriptorCacheTTL,
-		DescriptorGoogleOnly: *monitoringDescriptorCacheOnlyGoogle,
+func collectorConfigFromFlags() *config.Config {
+	return &config.Config{
+		ProjectIDs:                slices.Clone(*projectIDs),
+		ProjectsFilter:            *projectsFilter,
+		UniverseDomain:            *googleUniverseDomain,
+		MaxRetries:                *stackdriverMaxRetries,
+		HTTPTimeout:               *stackdriverHttpTimeout,
+		MaxBackoff:                *stackdriverMaxBackoffDuration,
+		BackoffJitter:             *stackdriverBackoffJitterBase,
+		RetryStatuses:             slices.Clone(*stackdriverRetryStatuses),
+		MetricsPrefixes:           slices.Clone(*monitoringMetricsPrefixes),
+		MetricsInterval:           *monitoringMetricsInterval,
+		MetricsOffset:             *monitoringMetricsOffset,
+		MetricsIngestDelay:        *monitoringMetricsIngestDelay,
+		FillMissingLabels:         *collectorFillMissingLabels,
+		DropDelegatedProjects:     *monitoringDropDelegatedProjects,
+		Filters:                   slices.Clone(*monitoringMetricsExtraFilter),
+		AggregateDeltas:           *monitoringMetricsAggregateDeltas,
+		AggregateDeltasTTL:        *monitoringMetricsDeltasTTL,
+		DescriptorCacheTTL:        *monitoringDescriptorCacheTTL,
+		DescriptorCacheOnlyGoogle: *monitoringDescriptorCacheOnlyGoogle,
 	}
 }
 

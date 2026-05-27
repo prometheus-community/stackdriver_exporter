@@ -26,7 +26,7 @@ import (
 )
 
 var _ = Describe("HistogramStore", func() {
-	var store *delta.InMemoryHistogramStore
+	var store collectors.DeltaHistogramStore
 	var histogram *collectors.HistogramMetric
 	descriptor := &monitoring.MetricDescriptor{Name: "This is a metric"}
 	bucketKey := 1.00000000000000000001

@@ -84,7 +84,7 @@ func TestCollectorCache(t *testing.T) {
 
 	t.Run("basic cache Op", func(t *testing.T) {
 		ttl := 1 * time.Second
-		cache := NewCollectorCache(ttl)
+		cache := newCollectorCache(ttl)
 		collector := createCollector("test-project")
 		key := "test-key"
 
@@ -102,7 +102,7 @@ func TestCollectorCache(t *testing.T) {
 
 	t.Run("multiple collectors", func(t *testing.T) {
 		ttl := 1 * time.Second
-		cache := NewCollectorCache(ttl)
+		cache := newCollectorCache(ttl)
 
 		collectors := map[string]*MonitoringCollector{
 			"test-key-1": createCollector("test-project-1"),

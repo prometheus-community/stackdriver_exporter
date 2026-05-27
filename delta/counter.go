@@ -39,14 +39,12 @@ type InMemoryCounterStore struct {
 }
 
 // NewInMemoryCounterStore returns an implementation of CounterStore which is persisted in-memory
-func NewInMemoryCounterStore(logger *slog.Logger, ttl time.Duration) *InMemoryCounterStore {
-	store := &InMemoryCounterStore{
+func NewInMemoryCounterStore(logger *slog.Logger, ttl time.Duration) collectors.DeltaCounterStore {
+	return &InMemoryCounterStore{
 		store:  &sync.Map{},
 		logger: logger,
 		ttl:    ttl,
 	}
-
-	return store
 }
 
 func (s *InMemoryCounterStore) Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *collectors.ConstMetric) {

@@ -39,14 +39,12 @@ type InMemoryHistogramStore struct {
 }
 
 // NewInMemoryHistogramStore returns an implementation of HistogramStore which is persisted in-memory
-func NewInMemoryHistogramStore(logger *slog.Logger, ttl time.Duration) *InMemoryHistogramStore {
-	store := &InMemoryHistogramStore{
+func NewInMemoryHistogramStore(logger *slog.Logger, ttl time.Duration) collectors.DeltaHistogramStore {
+	return &InMemoryHistogramStore{
 		store:  &sync.Map{},
 		logger: logger,
 		ttl:    ttl,
 	}
-
-	return store
 }
 
 func (s *InMemoryHistogramStore) Increment(metricDescriptor *monitoring.MetricDescriptor, currentValue *collectors.HistogramMetric) {

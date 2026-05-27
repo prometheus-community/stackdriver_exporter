@@ -13,212 +13,67 @@
 
 package config
 
-import (
-	"reflect"
-	"testing"
-	"time"
+import "testing"
 
-	"github.com/prometheus-community/stackdriver_exporter/collectors"
-)
-
-func TestParseDuration(t *testing.T) {
+func TestValidate(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name    string
-		raw     string
-		want    time.Duration
+		cfg     Config
 		wantErr bool
 	}{
 		{
-			name: "valid",
-			raw:  "5m",
-			want: 5 * time.Minute,
+			name:    "missing metrics prefixes",
+			cfg:     Config{},
+			wantErr: true,
 		},
 		{
-			name:    "invalid",
-			raw:     "nope",
-			wantErr: true,
+			name:    "valid with single prefix",
+			cfg:     Config{MetricsPrefixes: []string{"compute.googleapis.com/"}},
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := ParseDuration("metrics_interval", tt.raw)
+			err := tt.cfg.Validate()
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("ParseDuration() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("Validate() err = %v, wantErr = %v", err, tt.wantErr)
 			}
-			if err == nil && got != tt.want {
-				t.Fatalf("ParseDuration() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestValidateRetryStatuses(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		codes   []int
-		wantErr bool
-	}{
-		{
-			name:  "valid",
-			codes: []int{429, 503},
-		},
-		{
-			name:    "too low",
-			codes:   []int{99},
-			wantErr: true,
-		},
-		{
-			name:    "too high",
-			codes:   []int{600},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := ValidateRetryStatuses(tt.codes)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("ValidateRetryStatuses() error = %v, wantErr %v", err, tt.wantErr)
+			if got := tt.cfg.Validated(); got != (err == nil) {
+				t.Fatalf("Validated() = %v after Validate err = %v; want %v", got, err, err == nil)
 			}
 		})
 	}
 }
 
-func TestAllOptionsHaveUniqueKeys(t *testing.T) {
+func TestValidatedDefaultsFalse(t *testing.T) {
 	t.Parallel()
 
-	cliFlags := make(map[string]struct{}, len(AllOptions))
-	otelKeys := make(map[string]struct{}, len(AllOptions))
-
-	for _, option := range AllOptions {
-		if option.CLIFlag == "" {
-			t.Fatal("AllOptions contains an option with an empty CLI flag")
-		}
-		if _, ok := cliFlags[option.CLIFlag]; ok {
-			t.Fatalf("AllOptions contains duplicate CLI flag %q", option.CLIFlag)
-		}
-		cliFlags[option.CLIFlag] = struct{}{}
-
-		if option.OTelKey == "" {
-			t.Fatal("AllOptions contains an option with an empty OTel key")
-		}
-		if _, ok := otelKeys[option.OTelKey]; ok {
-			t.Fatalf("AllOptions contains duplicate OTel key %q", option.OTelKey)
-		}
-		otelKeys[option.OTelKey] = struct{}{}
+	c := Config{}
+	if c.Validated() {
+		t.Fatal("Validated() = true on fresh Config; expected false until Validate is called")
 	}
 }
 
-func TestNormalizeProjectIDs(t *testing.T) {
+func TestNewConfigWithDefaults(t *testing.T) {
 	t.Parallel()
 
-	input := []string{"project-b", "project-a", "project-b"}
-	want := []string{"project-a", "project-b"}
-
-	got := DeduplicateProjectIDs(input)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("NormalizeProjectIDs() = %#v, want %#v", got, want)
+	c := NewConfigWithDefaults()
+	if c.UniverseDomain != DefaultUniverseDomain {
+		t.Errorf("UniverseDomain = %q, want %q", c.UniverseDomain, DefaultUniverseDomain)
 	}
-	if !reflect.DeepEqual(input, []string{"project-b", "project-a", "project-b"}) {
-		t.Fatalf("NormalizeProjectIDs() mutated input = %#v", input)
+	if c.HTTPTimeout != DefaultHTTPTimeout {
+		t.Errorf("HTTPTimeout = %v, want %v", c.HTTPTimeout, DefaultHTTPTimeout)
 	}
-}
-
-func TestRuntimeConfigMonitoringCollectorOptions(t *testing.T) {
-	t.Parallel()
-
-	cfg := RuntimeConfig{
-		MetricsPrefixes:      []string{"pubsub.googleapis.com/topic/", "compute.googleapis.com/instance"},
-		Filters:              []string{"pubsub.googleapis.com/topic:resource.labels.topic_id=has_substring(\"prod\")"},
-		MetricsInterval:      5 * time.Minute,
-		MetricsOffset:        30 * time.Second,
-		MetricsIngest:        true,
-		FillMissing:          true,
-		DropDelegated:        true,
-		AggregateDeltas:      true,
-		DescriptorTTL:        10 * time.Minute,
-		DescriptorGoogleOnly: true,
+	if len(c.RetryStatuses) != len(DefaultRetryStatuses) || c.RetryStatuses[0] != DefaultRetryStatuses[0] {
+		t.Errorf("RetryStatuses = %v, want %v", c.RetryStatuses, DefaultRetryStatuses)
 	}
-
-	want := collectors.MonitoringCollectorOptions{
-		MetricTypePrefixes:        ParseMetricPrefixes(cfg.MetricsPrefixes),
-		ExtraFilters:              []collectors.MetricFilter{{TargetedMetricPrefix: "pubsub.googleapis.com/topic", FilterQuery: "resource.labels.topic_id=has_substring(\"prod\")"}},
-		RequestInterval:           5 * time.Minute,
-		RequestOffset:             30 * time.Second,
-		IngestDelay:               true,
-		FillMissingLabels:         true,
-		DropDelegatedProjects:     true,
-		AggregateDeltas:           true,
-		DescriptorCacheTTL:        10 * time.Minute,
-		DescriptorCacheOnlyGoogle: true,
-	}
-
-	got := cfg.MonitoringCollectorOptions()
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("MonitoringCollectorOptions() = %#v, want %#v", got, want)
-	}
-}
-
-func TestRuntimeConfigCollectorCacheTTL(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		cfg  RuntimeConfig
-		want time.Duration
-	}{
-		{
-			name: "default fallback",
-			cfg:  RuntimeConfig{},
-			want: 2 * time.Hour,
-		},
-		{
-			name: "aggregate deltas uses deltas ttl",
-			cfg: RuntimeConfig{
-				AggregateDeltas: true,
-				DeltasTTL:       30 * time.Minute,
-			},
-			want: 30 * time.Minute,
-		},
-		{
-			name: "descriptor ttl wins when larger",
-			cfg: RuntimeConfig{
-				AggregateDeltas: true,
-				DeltasTTL:       30 * time.Minute,
-				DescriptorTTL:   45 * time.Minute,
-			},
-			want: 45 * time.Minute,
-		},
-		{
-			name: "descriptor cache alone enables cache ttl",
-			cfg: RuntimeConfig{
-				DeltasTTL:     30 * time.Minute,
-				DescriptorTTL: 15 * time.Minute,
-			},
-			want: 30 * time.Minute,
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := tt.cfg.CollectorCacheTTL()
-			if got != tt.want {
-				t.Fatalf("CollectorCacheTTL() = %v, want %v", got, tt.want)
-			}
-		})
+	c.RetryStatuses[0] = 999
+	if DefaultRetryStatuses[0] == 999 {
+		t.Fatal("NewConfigWithDefaults did not copy RetryStatuses; default mutated")
 	}
 }

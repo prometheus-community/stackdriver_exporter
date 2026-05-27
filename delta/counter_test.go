@@ -26,7 +26,7 @@ import (
 )
 
 var _ = Describe("Counter", func() {
-	var store *delta.InMemoryCounterStore
+	var store collectors.DeltaCounterStore
 	var metric *collectors.ConstMetric
 	descriptor := &monitoring.MetricDescriptor{Name: "This is a metric"}
 
