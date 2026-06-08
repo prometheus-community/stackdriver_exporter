@@ -136,6 +136,10 @@ var (
 	monitoringDescriptorCacheOnlyGoogle = kingpin.Flag(
 		"monitoring.descriptor-cache-only-google", "Only cache descriptors for *.googleapis.com metrics",
 	).Default(strconv.FormatBool(config.DefaultDescriptorGoogleOnly)).Bool()
+
+	monitoringIgnoreDuplicates = kingpin.Flag(
+		"monitoring.ignore-duplicates", "Ignore duplicate time series returned by Cloud Monitoring",
+	).Default(strconv.FormatBool(config.DefaultIgnoreDuplicates)).Bool()
 )
 
 func init() {
@@ -181,13 +185,11 @@ func newHandler(runtime *collectors.Runtime, logger *slog.Logger, additionalGath
 	if err != nil {
 		return nil, fmt.Errorf("build collectors: %w", err)
 	}
-	registry := prometheus.NewRegistry()
-	for _, c := range cs {
-		if err := registry.Register(c); err != nil {
-			return nil, fmt.Errorf("register collector: %w", err)
-		}
+	gatherer, err := runtime.GathererFor(cs)
+	if err != nil {
+		return nil, err
 	}
-	h.handler = h.handlerFor(registry)
+	h.handler = h.handlerFor(gatherer)
 	return h, nil
 }
 
@@ -202,19 +204,18 @@ func (h *handler) filteredHandler(filters map[string]bool) (http.Handler, error)
 	if err != nil {
 		return nil, err
 	}
-	registry := prometheus.NewRegistry()
-	for _, c := range cs {
-		registry.MustRegister(c)
+	gatherer, err := h.runtime.GathererFor(cs)
+	if err != nil {
+		return nil, err
 	}
-	return h.handlerFor(registry), nil
+	return h.handlerFor(gatherer), nil
 }
 
-func (h *handler) handlerFor(registry *prometheus.Registry) http.Handler {
-	var gatherers prometheus.Gatherer = registry
+func (h *handler) handlerFor(gatherers prometheus.Gatherer) http.Handler {
 	if h.additionalGatherer != nil {
 		gatherers = prometheus.Gatherers{
 			h.additionalGatherer,
-			registry,
+			gatherers,
 		}
 	}
 	opts := promhttp.HandlerOpts{ErrorLog: slog.NewLogLogger(h.logger.Handler(), slog.LevelError)}
@@ -343,6 +344,7 @@ func collectorConfigFromFlags() *config.Config {
 		AggregateDeltasTTL:        *monitoringMetricsDeltasTTL,
 		DescriptorCacheTTL:        *monitoringDescriptorCacheTTL,
 		DescriptorCacheOnlyGoogle: *monitoringDescriptorCacheOnlyGoogle,
+		IgnoreDuplicates:          *monitoringIgnoreDuplicates,
 	}
 }
 
