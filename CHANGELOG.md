@@ -1,6 +1,9 @@
 ## master / unreleased
 
-- [FEATURE] Add `google.universe-domain` flag to specify the Google Cloud universe to use.
+## 0.19.0 / 2026-06-05
+
+- [FEATURE] Add `google.universe-domain` flag to specify the Google Cloud universe to use. #430
+- [BUGFIX] Fix metrics filter with colon `:` in query value. #428
 
 ## 0.18.0 / 2025-01-16
 
