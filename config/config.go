@@ -37,6 +37,7 @@ const (
 	DefaultDeltasTTL            = 30 * time.Minute
 	DefaultDescriptorTTL        = 0 * time.Second
 	DefaultDescriptorGoogleOnly = true
+	DefaultIgnoreDuplicates     = false
 )
 
 // DefaultRetryStatuses must be treated as immutable after declaration.
@@ -62,6 +63,7 @@ type Config struct {
 	AggregateDeltasTTL        time.Duration
 	DescriptorCacheTTL        time.Duration
 	DescriptorCacheOnlyGoogle bool
+	IgnoreDuplicates          bool
 
 	// validated is set by Validate on success.
 	validated bool
@@ -87,6 +89,7 @@ func NewConfigWithDefaults() *Config {
 		AggregateDeltasTTL:        DefaultDeltasTTL,
 		DescriptorCacheTTL:        DefaultDescriptorTTL,
 		DescriptorCacheOnlyGoogle: DefaultDescriptorGoogleOnly,
+		IgnoreDuplicates:          DefaultIgnoreDuplicates,
 	}
 }
 

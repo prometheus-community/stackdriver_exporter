@@ -72,6 +72,9 @@ func TestNewConfigWithDefaults(t *testing.T) {
 	if len(c.RetryStatuses) != len(DefaultRetryStatuses) || c.RetryStatuses[0] != DefaultRetryStatuses[0] {
 		t.Errorf("RetryStatuses = %v, want %v", c.RetryStatuses, DefaultRetryStatuses)
 	}
+	if c.IgnoreDuplicates != DefaultIgnoreDuplicates {
+		t.Errorf("IgnoreDuplicates = %v, want %v", c.IgnoreDuplicates, DefaultIgnoreDuplicates)
+	}
 	c.RetryStatuses[0] = 999
 	if DefaultRetryStatuses[0] == 999 {
 		t.Fatal("NewConfigWithDefaults did not copy RetryStatuses; default mutated")
