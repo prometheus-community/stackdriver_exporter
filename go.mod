@@ -9,7 +9,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.42.1
 	github.com/prometheus/client_golang v1.23.2
-	github.com/prometheus/common v0.70.0
+	github.com/prometheus/common v0.70.1
 	github.com/prometheus/exporter-toolkit v0.17.1
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/api v0.289.0
