@@ -85,10 +85,7 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, cfg *config.Config, co
 		return nil, err
 	}
 
-	var requestLimiter chan struct{}
-	if cfg.MaxConcurrentRequests > 0 {
-		requestLimiter = make(chan struct{}, cfg.MaxConcurrentRequests)
-	}
+	requestLimiter := newRequestLimiter(cfg.MaxConcurrentRequests)
 
 	return &Runtime{
 		cfg:                   cfg,
@@ -204,6 +201,16 @@ func collectorCacheTTL(cfg *config.Config) time.Duration {
 		return max(cfg.AggregateDeltasTTL, cfg.DescriptorCacheTTL)
 	}
 	return 2 * time.Hour
+}
+
+// newRequestLimiter returns a semaphore channel with capacity limit, or nil
+// if limit is not positive. A nil channel means unbounded concurrency to
+// acquireRequestLimiter/releaseRequestLimiter.
+func newRequestLimiter(limit int) chan struct{} {
+	if limit <= 0 {
+		return nil
+	}
+	return make(chan struct{}, limit)
 }
 
 func deduplicateProjectIDs(projectIDs []string) []string {
