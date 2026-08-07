@@ -44,6 +44,7 @@ type Runtime struct {
 	counterStoreFactory   CounterStoreFactory
 	histogramStoreFactory HistogramStoreFactory
 	cache                 *collectorCache
+	requestLimiter        chan struct{}
 }
 
 // NewRuntime resolves project IDs and creates the monitoring service. The
@@ -84,6 +85,11 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, cfg *config.Config, co
 		return nil, err
 	}
 
+	var requestLimiter chan struct{}
+	if cfg.MaxConcurrentRequests > 0 {
+		requestLimiter = make(chan struct{}, cfg.MaxConcurrentRequests)
+	}
+
 	return &Runtime{
 		cfg:                   cfg,
 		projectIDs:            projectIDs,
@@ -91,6 +97,7 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, cfg *config.Config, co
 		logger:                logger,
 		counterStoreFactory:   counterFactory,
 		histogramStoreFactory: histogramFactory,
+		requestLimiter:        requestLimiter,
 	}, nil
 }
 
@@ -161,6 +168,7 @@ func (r *Runtime) newCollector(projectID string, prefixFilter []string) (*Monito
 		r.logger,
 		r.counterStoreFactory(r.logger, r.cfg.AggregateDeltasTTL),
 		r.histogramStoreFactory(r.logger, r.cfg.AggregateDeltasTTL),
+		r.requestLimiter,
 	)
 }
 

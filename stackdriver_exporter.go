@@ -136,6 +136,10 @@ var (
 	monitoringDescriptorCacheOnlyGoogle = kingpin.Flag(
 		"monitoring.descriptor-cache-only-google", "Only cache descriptors for *.googleapis.com metrics",
 	).Default(strconv.FormatBool(config.DefaultDescriptorGoogleOnly)).Bool()
+
+	monitoringMaxConcurrency = kingpin.Flag(
+		"monitoring.max-concurrency", "Maximum number of concurrent Monitoring API time series requests across all projects. 0 means unbounded.",
+	).Default(strconv.Itoa(config.DefaultMaxConcurrentRequests)).Int()
 )
 
 func init() {
@@ -343,6 +347,7 @@ func collectorConfigFromFlags() *config.Config {
 		AggregateDeltasTTL:        *monitoringMetricsDeltasTTL,
 		DescriptorCacheTTL:        *monitoringDescriptorCacheTTL,
 		DescriptorCacheOnlyGoogle: *monitoringDescriptorCacheOnlyGoogle,
+		MaxConcurrentRequests:     *monitoringMaxConcurrency,
 	}
 }
 

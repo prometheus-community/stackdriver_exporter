@@ -82,6 +82,22 @@ type MonitoringCollector struct {
 	histogramStore                  DeltaHistogramStore
 	aggregateDeltas                 bool
 	descriptorCache                 DescriptorCache
+	requestLimiter                  chan struct{}
+}
+
+// acquireRequestLimiter blocks until a slot is available in sem. A nil sem
+// means unlimited concurrency and never blocks.
+func acquireRequestLimiter(sem chan struct{}) {
+	if sem != nil {
+		sem <- struct{}{}
+	}
+}
+
+// releaseRequestLimiter releases a slot acquired via acquireRequestLimiter.
+func releaseRequestLimiter(sem chan struct{}) {
+	if sem != nil {
+		<-sem
+	}
 }
 
 type MonitoringCollectorOptions struct {
@@ -144,7 +160,7 @@ type DeltaHistogramStore interface {
 	ListMetrics(metricDescriptorName string) []*HistogramMetric
 }
 
-func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger *slog.Logger, counterStore DeltaCounterStore, histogramStore DeltaHistogramStore) (*MonitoringCollector, error) {
+func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger *slog.Logger, counterStore DeltaCounterStore, histogramStore DeltaHistogramStore, requestLimiter chan struct{}) (*MonitoringCollector, error) {
 	const subsystem = "monitoring"
 
 	logger = logger.With("project_id", projectID)
@@ -240,6 +256,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		histogramStore:                  histogramStore,
 		aggregateDeltas:                 opts.AggregateDeltas,
 		descriptorCache:                 descriptorCache,
+		requestLimiter:                  requestLimiter,
 	}
 
 	return monitoringCollector, nil
@@ -338,6 +355,9 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				}
 
 				c.logger.Debug("retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
+
+				acquireRequestLimiter(c.requestLimiter)
+				defer releaseRequestLimiter(c.requestLimiter)
 
 				timeSeriesListCall := c.monitoringService.Projects.TimeSeries.List(projectResource(c.projectID)).
 					Filter(filter).
