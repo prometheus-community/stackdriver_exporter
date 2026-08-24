@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/oauth2/google"
@@ -37,13 +38,22 @@ type HistogramStoreFactory func(logger *slog.Logger, ttl time.Duration) DeltaHis
 
 // Runtime holds the resolved state produced by NewRuntime.
 type Runtime struct {
-	cfg                   *config.Config
-	projectIDs            []string
+	cfg *config.Config
+	// projectIDs is a *atomic.Pointer[[]string] (rather than a plain []string)
+	// so that WithCache's shallow struct copy shares live state with the
+	// original: a background refresh (see StartProjectDiscoveryRefresh) must
+	// be visible through every Runtime value derived from the same NewRuntime
+	// call, and scrapes must be able to read it without lock contention.
+	projectIDs            *atomic.Pointer[[]string]
 	service               *monitoring.Service
 	logger                *slog.Logger
 	counterStoreFactory   CounterStoreFactory
 	histogramStoreFactory HistogramStoreFactory
 	cache                 *collectorCache
+	// discoverProjectIDs resolves cfg.ProjectsFilter to project IDs. It
+	// defaults to getProjectIDsFromFilter; tests override it to avoid
+	// depending on Application Default Credentials.
+	discoverProjectIDs func(ctx context.Context, filter string) ([]string, error)
 }
 
 // NewRuntime resolves project IDs and creates the monitoring service. The
@@ -84,14 +94,71 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, cfg *config.Config, co
 		return nil, err
 	}
 
+	projectIDsPtr := &atomic.Pointer[[]string]{}
+	projectIDsPtr.Store(&projectIDs)
+
 	return &Runtime{
 		cfg:                   cfg,
-		projectIDs:            projectIDs,
+		projectIDs:            projectIDsPtr,
 		service:               service,
 		logger:                logger,
 		counterStoreFactory:   counterFactory,
 		histogramStoreFactory: histogramFactory,
+		discoverProjectIDs:    getProjectIDsFromFilter,
 	}, nil
+}
+
+// StartProjectDiscoveryRefresh periodically re-resolves cfg.ProjectsFilter in
+// the background so that projects added to or removed from the matching
+// org/folder are picked up without restarting the exporter. It is a no-op
+// unless both cfg.ProjectsFilter and cfg.ProjectsRefreshInterval are set, so
+// existing deployments see no behavior change unless they opt in.
+//
+// The refresh runs until ctx is canceled; callers must cancel ctx on shutdown
+// to avoid leaking the goroutine.
+func (r *Runtime) StartProjectDiscoveryRefresh(ctx context.Context) {
+	if r.cfg.ProjectsFilter == "" || r.cfg.ProjectsRefreshInterval <= 0 {
+		return
+	}
+	go r.refreshProjectIDsLoop(ctx)
+}
+
+func (r *Runtime) refreshProjectIDsLoop(ctx context.Context) {
+	ticker := time.NewTicker(r.cfg.ProjectsRefreshInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			r.refreshProjectIDs(ctx)
+		}
+	}
+}
+
+// refreshProjectIDs re-resolves cfg.ProjectsFilter and, on a successful
+// non-empty result, atomically replaces the project list used by future
+// scrapes. A transient API error or an unexpectedly empty result (e.g. IAM
+// eventual consistency, a momentarily over-narrow filter) is logged and the
+// previous known-good list is kept, so a background refresh hiccup never
+// blanks out or fails a scrape.
+func (r *Runtime) refreshProjectIDs(ctx context.Context) {
+	ids, err := r.discoverProjectIDs(ctx, r.cfg.ProjectsFilter)
+	if err != nil {
+		r.logger.Warn("failed to refresh project list from google.projects.filter; keeping previous list", "err", err)
+		return
+	}
+
+	ids = append(ids, r.cfg.ProjectIDs...)
+	ids = deduplicateProjectIDs(ids)
+
+	if len(ids) == 0 {
+		r.logger.Warn("google.projects.filter refresh returned zero projects; keeping previous list")
+		return
+	}
+
+	r.projectIDs.Store(&ids)
+	r.logger.Info("refreshed project list from google.projects.filter", "count", len(ids))
 }
 
 // WithCache returns a Runtime configured to cache its collectors per
@@ -125,8 +192,9 @@ func (r *Runtime) CollectorsForPrefixes(prefixFilter []string) ([]*MonitoringCol
 }
 
 func (r *Runtime) buildCollectors(prefixFilter []string) ([]*MonitoringCollector, error) {
-	result := make([]*MonitoringCollector, 0, len(r.projectIDs))
-	for _, projectID := range r.projectIDs {
+	projectIDs := *r.projectIDs.Load()
+	result := make([]*MonitoringCollector, 0, len(projectIDs))
+	for _, projectID := range projectIDs {
 		c, err := r.collectorFor(projectID, prefixFilter)
 		if err != nil {
 			return nil, fmt.Errorf("collector for %q: %w", projectID, err)
@@ -222,9 +290,16 @@ func getProjectIDsFromFilter(ctx context.Context, filter string) ([]string, erro
 	if err != nil {
 		return nil, err
 	}
+	return listProjectIDs(ctx, service, filter)
+}
 
+// listProjectIDs returns the list of project IDs that match filter, using an
+// already-constructed cloudresourcemanager service. Split out from
+// getProjectIDsFromFilter so tests can inject a fake service pointed at an
+// httptest.Server instead of relying on Application Default Credentials.
+func listProjectIDs(ctx context.Context, service *cloudresourcemanager.Service, filter string) ([]string, error) {
 	var projectIDs []string
-	err = service.Projects.List().Filter(filter).Pages(ctx, func(page *cloudresourcemanager.ListProjectsResponse) error {
+	err := service.Projects.List().Filter(filter).Pages(ctx, func(page *cloudresourcemanager.ListProjectsResponse) error {
 		for _, project := range page.Projects {
 			projectIDs = append(projectIDs, project.ProjectId)
 		}

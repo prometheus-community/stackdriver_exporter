@@ -63,6 +63,10 @@ var (
 		"google.projects.filter", "Google projects search filter.",
 	).String()
 
+	projectsRefreshInterval = kingpin.Flag(
+		"google.projects.filter-refresh-interval", "How often to re-evaluate google.projects.filter to pick up new/removed projects. 0 disables periodic refresh.",
+	).Default(config.DefaultProjectsRefreshInterval.String()).Duration()
+
 	googleUniverseDomain = kingpin.Flag(
 		"google.universe-domain", "The Cloud universe to use.",
 	).Default(config.DefaultUniverseDomain).String()
@@ -143,31 +147,37 @@ func init() {
 }
 
 type handler struct {
-	handler            http.Handler
 	logger             *slog.Logger
 	runtime            *collectors.Runtime
 	additionalGatherer prometheus.Gatherer
 }
 
+// ServeHTTP rebuilds its collector registry from the runtime's current
+// project list on every request (as the ?collect= filtered path always has),
+// rather than serving a registry frozen at startup. This is what lets a
+// background google.projects.filter refresh (see Runtime.StartProjectDiscoveryRefresh)
+// actually reach scrapes: Runtime.WithCache() keeps the underlying
+// MonitoringCollectors (and their delta-counter state) cached across calls,
+// so rebuilding the registry wrapper per request is cheap.
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	collectParams := r.URL.Query()["collect"]
 	filters := make(map[string]bool)
 	for _, param := range collectParams {
 		filters[param] = true
 	}
+	prefixFilter := make([]string, 0, len(filters))
+	for f := range filters {
+		prefixFilter = append(prefixFilter, f)
+	}
+	slices.Sort(prefixFilter)
 
-	if len(filters) > 0 {
-		handler, err := h.filteredHandler(filters)
-		if err != nil {
-			h.logger.Error("error creating monitoring collector", "err", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		handler.ServeHTTP(w, r)
+	httpHandler, err := h.handlerForPrefixes(prefixFilter)
+	if err != nil {
+		h.logger.Error("error creating monitoring collector", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-
-	h.handler.ServeHTTP(w, r)
+	httpHandler.ServeHTTP(w, r)
 }
 
 func newHandler(runtime *collectors.Runtime, logger *slog.Logger, additionalGatherer prometheus.Gatherer) (*handler, error) {
@@ -177,34 +187,24 @@ func newHandler(runtime *collectors.Runtime, logger *slog.Logger, additionalGath
 		additionalGatherer: additionalGatherer,
 	}
 
-	cs, err := runtime.Collectors()
-	if err != nil {
+	// Fail fast on startup config errors (e.g. bad metric prefixes); the
+	// resulting collectors are discarded since each scrape builds its own.
+	if _, err := runtime.Collectors(); err != nil {
 		return nil, fmt.Errorf("build collectors: %w", err)
 	}
-	registry := prometheus.NewRegistry()
-	for _, c := range cs {
-		if err := registry.Register(c); err != nil {
-			return nil, fmt.Errorf("register collector: %w", err)
-		}
-	}
-	h.handler = h.handlerFor(registry)
 	return h, nil
 }
 
-func (h *handler) filteredHandler(filters map[string]bool) (http.Handler, error) {
-	prefixFilter := make([]string, 0, len(filters))
-	for f := range filters {
-		prefixFilter = append(prefixFilter, f)
-	}
-	slices.Sort(prefixFilter)
-
+func (h *handler) handlerForPrefixes(prefixFilter []string) (http.Handler, error) {
 	cs, err := h.runtime.CollectorsForPrefixes(prefixFilter)
 	if err != nil {
 		return nil, err
 	}
 	registry := prometheus.NewRegistry()
 	for _, c := range cs {
-		registry.MustRegister(c)
+		if err := registry.Register(c); err != nil {
+			return nil, fmt.Errorf("register collector: %w", err)
+		}
 	}
 	return h.handlerFor(registry), nil
 }
@@ -236,7 +236,8 @@ func main() {
 	if *monitoringMetricsTypePrefixes != "" {
 		logger.Warn("The monitoring.metrics-type-prefixes flag is deprecated and will be replaced by monitoring.metrics-prefix.")
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	cfg := collectorConfigFromFlags()
 
@@ -268,6 +269,7 @@ func main() {
 		os.Exit(1)
 	}
 	runtime = runtime.WithCache()
+	runtime.StartProjectDiscoveryRefresh(ctx)
 
 	if *metricsPath == *stackdriverMetricsPath {
 		h, err := newHandler(runtime, logger, prometheus.DefaultGatherer)
@@ -326,6 +328,7 @@ func collectorConfigFromFlags() *config.Config {
 	return &config.Config{
 		ProjectIDs:                slices.Clone(*projectIDs),
 		ProjectsFilter:            *projectsFilter,
+		ProjectsRefreshInterval:   *projectsRefreshInterval,
 		UniverseDomain:            *googleUniverseDomain,
 		MaxRetries:                *stackdriverMaxRetries,
 		HTTPTimeout:               *stackdriverHttpTimeout,
