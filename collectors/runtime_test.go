@@ -144,6 +144,38 @@ func TestParseMetricTypePrefixes(t *testing.T) {
 	}
 }
 
+func TestNewRequestLimiter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		limit   int
+		wantCap int
+		wantNil bool
+	}{
+		{name: "zero means unbounded", limit: 0, wantNil: true},
+		{name: "negative means unbounded", limit: -1, wantNil: true},
+		{name: "positive limit sizes the channel", limit: 5, wantCap: 5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := newRequestLimiter(tt.limit)
+			if tt.wantNil {
+				if got != nil {
+					t.Fatalf("newRequestLimiter(%d) = %v, want nil", tt.limit, got)
+				}
+				return
+			}
+			if cap(got) != tt.wantCap {
+				t.Fatalf("newRequestLimiter(%d) cap = %d, want %d", tt.limit, cap(got), tt.wantCap)
+			}
+		})
+	}
+}
+
 func TestRuntimeFilterMetricTypePrefixes(t *testing.T) {
 	t.Parallel()
 

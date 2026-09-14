@@ -23,20 +23,21 @@ import (
 )
 
 const (
-	DefaultUniverseDomain       = "googleapis.com"
-	DefaultMaxRetries           = 0
-	DefaultHTTPTimeout          = 10 * time.Second
-	DefaultMaxBackoff           = 5 * time.Second
-	DefaultBackoffJitter        = 1 * time.Second
-	DefaultMetricsInterval      = 5 * time.Minute
-	DefaultMetricsOffset        = 0 * time.Second
-	DefaultMetricsIngest        = false
-	DefaultFillMissing          = true
-	DefaultDropDelegated        = false
-	DefaultAggregateDeltas      = false
-	DefaultDeltasTTL            = 30 * time.Minute
-	DefaultDescriptorTTL        = 0 * time.Second
-	DefaultDescriptorGoogleOnly = true
+	DefaultUniverseDomain        = "googleapis.com"
+	DefaultMaxRetries            = 0
+	DefaultHTTPTimeout           = 10 * time.Second
+	DefaultMaxBackoff            = 5 * time.Second
+	DefaultBackoffJitter         = 1 * time.Second
+	DefaultMetricsInterval       = 5 * time.Minute
+	DefaultMetricsOffset         = 0 * time.Second
+	DefaultMetricsIngest         = false
+	DefaultFillMissing           = true
+	DefaultDropDelegated         = false
+	DefaultAggregateDeltas       = false
+	DefaultDeltasTTL             = 30 * time.Minute
+	DefaultDescriptorTTL         = 0 * time.Second
+	DefaultDescriptorGoogleOnly  = true
+	DefaultMaxConcurrentRequests = 0
 )
 
 // DefaultRetryStatuses must be treated as immutable after declaration.
@@ -62,6 +63,7 @@ type Config struct {
 	AggregateDeltasTTL        time.Duration
 	DescriptorCacheTTL        time.Duration
 	DescriptorCacheOnlyGoogle bool
+	MaxConcurrentRequests     int
 
 	// validated is set by Validate on success.
 	validated bool
@@ -87,6 +89,7 @@ func NewConfigWithDefaults() *Config {
 		AggregateDeltasTTL:        DefaultDeltasTTL,
 		DescriptorCacheTTL:        DefaultDescriptorTTL,
 		DescriptorCacheOnlyGoogle: DefaultDescriptorGoogleOnly,
+		MaxConcurrentRequests:     DefaultMaxConcurrentRequests,
 	}
 }
 

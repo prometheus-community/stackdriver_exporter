@@ -91,6 +91,7 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 | `monitoring.aggregate-deltas`       | No       |                           | If enabled will treat all DELTA metrics as an in-memory counter instead of a gauge. Be sure to read [what to know about aggregating DELTA metrics](#what-to-know-about-aggregating-delta-metrics) |
 | `monitoring.aggregate-deltas-ttl`   | No       | `30m`                     | How long should a delta metric continue to be exported and stored after GCP stops producing it. Read [slow moving metrics](#slow-moving-metrics) to understand the problem this attempts to solve |
 | `monitoring.descriptor-cache-ttl`   | No       | `0s`                      | How long should the metric descriptors for a prefixed be cached for                                                                                                                               |
+| `monitoring.max-concurrency`        | No       | `0`                       | Maximum number of concurrent Monitoring API time series requests across all projects. `0` means unbounded. Set this when `google.projects.filter` or a long `google.project-ids` list resolves to many projects, to bound memory usage. |
 | `stackdriver.max-retries`           | No       | `0`                       | Max number of retries that should be attempted on 503 errors from stackdriver.                                                                                                                    |
 | `stackdriver.http-timeout`          | No       | `10s`                     |  How long should stackdriver_exporter wait for a result from the Stackdriver API.                                                                                                                 |
 | `stackdriver.max-backoff=`          | No       |                           | Max time between each request in an exp backoff scenario.                                                                                                                                         |
@@ -187,6 +188,29 @@ Using projects filter:
 stackdriver_exporter \
   --google.projects.filter='labels.monitoring="true"'
 ```
+
+### Limiting concurrency for many-project setups
+
+When `google.projects.filter` (or a long, repeated `google.project-ids`) resolves to many
+projects, each scrape fetches metrics for every metric descriptor of every project
+concurrently, with no limit by default. In memory-constrained environments (e.g. a GKE pod
+with a small CPU/memory limit), this can spawn far more concurrent Monitoring API requests
+than the container can actually service at once and lead to OOM kills.
+
+Use `monitoring.max-concurrency` to cap the number of concurrent Monitoring API time series
+requests across **all** projects in a single scrape:
+
+```
+stackdriver_exporter \
+  --google.projects.filter='labels.monitoring="true"' \
+  --monitoring.metrics-prefixes='compute.googleapis.com/instance/cpu' \
+  --monitoring.max-concurrency=20
+```
+
+This is a single, process-wide limit shared across every resolved project, so it bounds
+memory regardless of how many projects the filter matches. It defaults to `0` (unbounded,
+matching prior behavior); start with a value in the `10`-`30` range and adjust based on your
+pod's CPU/memory limits and how many projects/metric prefixes you're scraping.
 
 ### Filtering enabled collectors
 
