@@ -199,8 +199,6 @@ func TestRuntimeFilterMetricTypePrefixes(t *testing.T) {
 	}
 }
 
-// newTestRuntime builds a minimal Runtime for unit testing the project
-// discovery refresh path, bypassing NewRuntime's ADC/GCP service setup.
 func newTestRuntime(t *testing.T, cfg *config.Config, initialIDs []string, discover func(ctx context.Context, filter string) ([]string, error)) *Runtime {
 	t.Helper()
 	ptr := &atomic.Pointer[[]string]{}
@@ -213,9 +211,6 @@ func newTestRuntime(t *testing.T, cfg *config.Config, initialIDs []string, disco
 	}
 }
 
-// fakeCloudResourceManagerServer serves a canned ListProjectsResponse (or an
-// error status) so listProjectIDs can be tested against a real HTTP client
-// without depending on Application Default Credentials.
 func fakeCloudResourceManagerServer(t *testing.T, statusCode int, resp *cloudresourcemanager.ListProjectsResponse) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -187,8 +187,6 @@ func newHandler(runtime *collectors.Runtime, logger *slog.Logger, additionalGath
 		additionalGatherer: additionalGatherer,
 	}
 
-	// Fail fast on startup config errors (e.g. bad metric prefixes); the
-	// resulting collectors are discarded since each scrape builds its own.
 	if _, err := runtime.Collectors(); err != nil {
 		return nil, fmt.Errorf("build collectors: %w", err)
 	}
