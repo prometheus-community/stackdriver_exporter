@@ -15,6 +15,7 @@ package collectors
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -126,4 +127,25 @@ func TestCollectorCache(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestCollectorCacheConcurrentGetIsRaceFree(t *testing.T) {
+	cache := newCollectorCache(time.Millisecond)
+	key := "test-key"
+	cache.Store(key, &MonitoringCollector{projectID: "test-project"})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				cache.Get(key)
+				if j%10 == 0 {
+					cache.Store(key, &MonitoringCollector{projectID: "test-project"})
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
