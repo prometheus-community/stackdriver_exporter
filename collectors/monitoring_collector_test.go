@@ -127,62 +127,15 @@ func TestProjectResource(t *testing.T) {
 	}
 }
 
-func TestAcquireReleaseRequestLimiterNilIsUnbounded(t *testing.T) {
-	t.Parallel()
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		acquireRequestLimiter(nil)
-		releaseRequestLimiter(nil)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("acquire/releaseRequestLimiter blocked on a nil limiter")
-	}
-}
-
-func TestAcquireRequestLimiterBlocksWhenFull(t *testing.T) {
-	t.Parallel()
-
-	sem := make(chan struct{}, 1)
-	acquireRequestLimiter(sem)
-
-	acquired := make(chan struct{})
-	go func() {
-		acquireRequestLimiter(sem)
-		close(acquired)
-	}()
-
-	select {
-	case <-acquired:
-		t.Fatal("second acquireRequestLimiter succeeded while limiter was full")
-	case <-time.After(50 * time.Millisecond):
-	}
-
-	releaseRequestLimiter(sem)
-
-	select {
-	case <-acquired:
-	case <-time.After(time.Second):
-		t.Fatal("acquireRequestLimiter did not unblock after releaseRequestLimiter")
-	}
-}
-
-// TestRequestLimiterBoundsConcurrency verifies that a non-nil requestLimiter
-// caps the number of concurrent TimeSeries.List requests a single Collect
-// call can have in flight, regardless of how many metric descriptors are
-// being fetched. This guards against the unbounded per-descriptor goroutine
-// fan-out (one HTTP request + JSON decode per descriptor) that can spike
-// memory enough to OOM the process when a project has many metric
-// descriptors.
-func TestRequestLimiterBoundsConcurrency(t *testing.T) {
-	const (
-		numDescriptors = 6
-		limit          = 2
-	)
+// TestTimeSeriesRequestLimiterBoundsConcurrency verifies that the process-wide
+// timeSeriesRequestLimiter caps the number of concurrent TimeSeries.List
+// requests a single Collect call can have in flight, regardless of how many
+// metric descriptors are being fetched. This guards against the unbounded
+// per-descriptor goroutine fan-out (one HTTP request + JSON decode per
+// descriptor) that can spike memory enough to OOM the process when a project
+// has many metric descriptors.
+func TestTimeSeriesRequestLimiterBoundsConcurrency(t *testing.T) {
+	numDescriptors := maxConcurrentTimeSeriesRequests + 10
 
 	var (
 		mu          sync.Mutex
@@ -197,7 +150,7 @@ func TestRequestLimiterBoundsConcurrency(t *testing.T) {
 			descriptors := make([]*monitoring.MetricDescriptor, 0, numDescriptors)
 			for i := 0; i < numDescriptors; i++ {
 				descriptors = append(descriptors, &monitoring.MetricDescriptor{
-					Type: "custom.googleapis.com/metric_" + string(rune('a'+i)),
+					Type: "custom.googleapis.com/metric_" + strings.Repeat("a", i+1),
 				})
 			}
 			writeJSONResponse(w, &monitoring.ListMetricDescriptorsResponse{MetricDescriptors: descriptors})
@@ -239,7 +192,6 @@ func TestRequestLimiterBoundsConcurrency(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	limiter := make(chan struct{}, limit)
 
 	collector, err := NewMonitoringCollector(
 		"test-project",
@@ -252,13 +204,12 @@ func TestRequestLimiterBoundsConcurrency(t *testing.T) {
 		logger,
 		noopCounterStore{},
 		noopHistogramStore{},
-		limiter,
 	)
 	if err != nil {
 		t.Fatalf("failed to create collector: %v", err)
 	}
 
-	ch := make(chan prometheus.Metric, 100)
+	ch := make(chan prometheus.Metric, numDescriptors+10)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -270,11 +221,11 @@ func TestRequestLimiterBoundsConcurrency(t *testing.T) {
 	close(ch)
 	<-done
 
-	if maxInFlight > limit {
-		t.Fatalf("observed %d concurrent TimeSeries.List requests, want <= %d", maxInFlight, limit)
+	if maxInFlight > maxConcurrentTimeSeriesRequests {
+		t.Fatalf("observed %d concurrent TimeSeries.List requests, want <= %d", maxInFlight, maxConcurrentTimeSeriesRequests)
 	}
-	if maxInFlight < limit {
-		t.Fatalf("expected concurrency to reach the configured limit %d, got max observed %d; test may not be exercising real contention", limit, maxInFlight)
+	if maxInFlight < maxConcurrentTimeSeriesRequests {
+		t.Fatalf("expected concurrency to reach the limiter's capacity %d, got max observed %d; test may not be exercising real contention", maxConcurrentTimeSeriesRequests, maxInFlight)
 	}
 }
 

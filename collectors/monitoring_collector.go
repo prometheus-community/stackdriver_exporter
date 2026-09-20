@@ -29,6 +29,21 @@ import (
 
 const namespace = "stackdriver"
 
+// maxConcurrentTimeSeriesRequests bounds how many Monitoring API
+// TimeSeries.List requests can be in flight at once across the whole
+// process. Each request holds a full decoded JSON response in memory for
+// its duration; reportMonitoringMetrics fans a goroutine out per metric
+// descriptor per project with no other bound, so when google.projects.filter
+// (or a long google.project-ids list) resolves to many projects, or a
+// project has many descriptors, the number of concurrently in-flight
+// responses is otherwise unbounded and can spike memory enough to OOM a
+// resource-constrained pod. This is shared by every MonitoringCollector in
+// the process so the bound holds regardless of how many projects are
+// scraped.
+const maxConcurrentTimeSeriesRequests = 20
+
+var timeSeriesRequestLimiter = make(chan struct{}, maxConcurrentTimeSeriesRequests)
+
 type MetricFilter struct {
 	TargetedMetricPrefix string
 	FilterQuery          string
@@ -82,22 +97,6 @@ type MonitoringCollector struct {
 	histogramStore                  DeltaHistogramStore
 	aggregateDeltas                 bool
 	descriptorCache                 DescriptorCache
-	requestLimiter                  chan struct{}
-}
-
-// acquireRequestLimiter blocks until a slot is available in sem. A nil sem
-// means unlimited concurrency and never blocks.
-func acquireRequestLimiter(sem chan struct{}) {
-	if sem != nil {
-		sem <- struct{}{}
-	}
-}
-
-// releaseRequestLimiter releases a slot acquired via acquireRequestLimiter.
-func releaseRequestLimiter(sem chan struct{}) {
-	if sem != nil {
-		<-sem
-	}
 }
 
 type MonitoringCollectorOptions struct {
@@ -160,7 +159,7 @@ type DeltaHistogramStore interface {
 	ListMetrics(metricDescriptorName string) []*HistogramMetric
 }
 
-func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger *slog.Logger, counterStore DeltaCounterStore, histogramStore DeltaHistogramStore, requestLimiter chan struct{}) (*MonitoringCollector, error) {
+func NewMonitoringCollector(projectID string, monitoringService *monitoring.Service, opts MonitoringCollectorOptions, logger *slog.Logger, counterStore DeltaCounterStore, histogramStore DeltaHistogramStore) (*MonitoringCollector, error) {
 	const subsystem = "monitoring"
 
 	logger = logger.With("project_id", projectID)
@@ -256,7 +255,6 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		histogramStore:                  histogramStore,
 		aggregateDeltas:                 opts.AggregateDeltas,
 		descriptorCache:                 descriptorCache,
-		requestLimiter:                  requestLimiter,
 	}
 
 	return monitoringCollector, nil
@@ -356,8 +354,8 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 
 				c.logger.Debug("retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
 
-				acquireRequestLimiter(c.requestLimiter)
-				defer releaseRequestLimiter(c.requestLimiter)
+				timeSeriesRequestLimiter <- struct{}{}
+				defer func() { <-timeSeriesRequestLimiter }()
 
 				timeSeriesListCall := c.monitoringService.Projects.TimeSeries.List(projectResource(c.projectID)).
 					Filter(filter).

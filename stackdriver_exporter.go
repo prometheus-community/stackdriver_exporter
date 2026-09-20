@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/KimMachineGun/automemlimit/memlimit"
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
@@ -136,10 +137,6 @@ var (
 	monitoringDescriptorCacheOnlyGoogle = kingpin.Flag(
 		"monitoring.descriptor-cache-only-google", "Only cache descriptors for *.googleapis.com metrics",
 	).Default(strconv.FormatBool(config.DefaultDescriptorGoogleOnly)).Bool()
-
-	monitoringMaxConcurrency = kingpin.Flag(
-		"monitoring.max-concurrency", "Maximum number of concurrent Monitoring API time series requests across all projects. 0 means unbounded.",
-	).Default(strconv.Itoa(config.DefaultMaxConcurrentRequests)).Int()
 )
 
 func init() {
@@ -234,6 +231,11 @@ func main() {
 	kingpin.Parse()
 
 	logger := promslog.New(promslogConfig)
+
+	if _, err := memlimit.Set(memlimit.WithLogger(logger)); err != nil {
+		logger.Warn("failed to set GOMEMLIMIT from cgroup memory limit", "err", err)
+	}
+
 	if *projectID != "" {
 		logger.Warn("The google.project-id flag is deprecated and will be replaced by google.project-ids.")
 	}
@@ -347,7 +349,6 @@ func collectorConfigFromFlags() *config.Config {
 		AggregateDeltasTTL:        *monitoringMetricsDeltasTTL,
 		DescriptorCacheTTL:        *monitoringDescriptorCacheTTL,
 		DescriptorCacheOnlyGoogle: *monitoringDescriptorCacheOnlyGoogle,
-		MaxConcurrentRequests:     *monitoringMaxConcurrency,
 	}
 }
 

@@ -91,7 +91,6 @@ If you are still using the legacy [Access scopes][access-scopes], the `https://w
 | `monitoring.aggregate-deltas`       | No       |                           | If enabled will treat all DELTA metrics as an in-memory counter instead of a gauge. Be sure to read [what to know about aggregating DELTA metrics](#what-to-know-about-aggregating-delta-metrics) |
 | `monitoring.aggregate-deltas-ttl`   | No       | `30m`                     | How long should a delta metric continue to be exported and stored after GCP stops producing it. Read [slow moving metrics](#slow-moving-metrics) to understand the problem this attempts to solve |
 | `monitoring.descriptor-cache-ttl`   | No       | `0s`                      | How long should the metric descriptors for a prefixed be cached for                                                                                                                               |
-| `monitoring.max-concurrency`        | No       | `0`                       | Maximum number of concurrent Monitoring API time series requests across all projects. `0` means unbounded. Set this when `google.projects.filter` or a long `google.project-ids` list resolves to many projects, to bound memory usage. |
 | `stackdriver.max-retries`           | No       | `0`                       | Max number of retries that should be attempted on 503 errors from stackdriver.                                                                                                                    |
 | `stackdriver.http-timeout`          | No       | `10s`                     |  How long should stackdriver_exporter wait for a result from the Stackdriver API.                                                                                                                 |
 | `stackdriver.max-backoff=`          | No       |                           | Max time between each request in an exp backoff scenario.                                                                                                                                         |
@@ -189,28 +188,29 @@ stackdriver_exporter \
   --google.projects.filter='labels.monitoring="true"'
 ```
 
-### Limiting concurrency for many-project setups
+### Memory limits in constrained environments
 
 When `google.projects.filter` (or a long, repeated `google.project-ids`) resolves to many
-projects, each scrape fetches metrics for every metric descriptor of every project
-concurrently, with no limit by default. In memory-constrained environments (e.g. a GKE pod
-with a small CPU/memory limit), this can spawn far more concurrent Monitoring API requests
-than the container can actually service at once and lead to OOM kills.
+projects, each scrape fetches metrics for every metric descriptor of every project. In
+memory-constrained environments (e.g. a GKE pod with a small memory limit), an unbounded
+fan-out of concurrent Monitoring API requests and JSON decodes can grow the heap enough to
+OOM the process. Two fixes address this together, and neither requires configuration:
 
-Use `monitoring.max-concurrency` to cap the number of concurrent Monitoring API time series
-requests across **all** projects in a single scrape:
+- Concurrent `TimeSeries.List` requests are capped process-wide at a fixed internal limit,
+  so a scrape can never have more than that many API responses in memory at once, no matter
+  how many projects or descriptors it fans out across.
+- `stackdriver_exporter` also reads the container's memory limit (from the cgroup) at
+  startup and sets Go's [`GOMEMLIMIT`][gomemlimit] to 90% of it, via
+  [`automemlimit`][automemlimit]. This makes the garbage collector reclaim memory more
+  aggressively as usage approaches the limit. This happens automatically whenever a memory
+  limit is set on the container (e.g. `resources.limits.memory` in a Kubernetes pod spec).
 
-```
-stackdriver_exporter \
-  --google.projects.filter='labels.monitoring="true"' \
-  --monitoring.metrics-prefixes='compute.googleapis.com/instance/cpu' \
-  --monitoring.max-concurrency=20
-```
+If you need to override the detected value, set the `GOMEMLIMIT` environment variable
+directly, or `AUTOMEMLIMIT` to change the ratio (or `off` to disable auto-detection
+entirely).
 
-This is a single, process-wide limit shared across every resolved project, so it bounds
-memory regardless of how many projects the filter matches. It defaults to `0` (unbounded,
-matching prior behavior); start with a value in the `10`-`30` range and adjust based on your
-pod's CPU/memory limits and how many projects/metric prefixes you're scraping.
+[gomemlimit]: https://pkg.go.dev/runtime/debug#SetMemoryLimit
+[automemlimit]: https://github.com/KimMachineGun/automemlimit
 
 ### Filtering enabled collectors
 

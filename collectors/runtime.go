@@ -44,7 +44,6 @@ type Runtime struct {
 	counterStoreFactory   CounterStoreFactory
 	histogramStoreFactory HistogramStoreFactory
 	cache                 *collectorCache
-	requestLimiter        chan struct{}
 }
 
 // NewRuntime resolves project IDs and creates the monitoring service. The
@@ -85,8 +84,6 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, cfg *config.Config, co
 		return nil, err
 	}
 
-	requestLimiter := newRequestLimiter(cfg.MaxConcurrentRequests)
-
 	return &Runtime{
 		cfg:                   cfg,
 		projectIDs:            projectIDs,
@@ -94,7 +91,6 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, cfg *config.Config, co
 		logger:                logger,
 		counterStoreFactory:   counterFactory,
 		histogramStoreFactory: histogramFactory,
-		requestLimiter:        requestLimiter,
 	}, nil
 }
 
@@ -165,7 +161,6 @@ func (r *Runtime) newCollector(projectID string, prefixFilter []string) (*Monito
 		r.logger,
 		r.counterStoreFactory(r.logger, r.cfg.AggregateDeltasTTL),
 		r.histogramStoreFactory(r.logger, r.cfg.AggregateDeltasTTL),
-		r.requestLimiter,
 	)
 }
 
@@ -201,16 +196,6 @@ func collectorCacheTTL(cfg *config.Config) time.Duration {
 		return max(cfg.AggregateDeltasTTL, cfg.DescriptorCacheTTL)
 	}
 	return 2 * time.Hour
-}
-
-// newRequestLimiter returns a semaphore channel with capacity limit, or nil
-// if limit is not positive. A nil channel means unbounded concurrency to
-// acquireRequestLimiter/releaseRequestLimiter.
-func newRequestLimiter(limit int) chan struct{} {
-	if limit <= 0 {
-		return nil
-	}
-	return make(chan struct{}, limit)
 }
 
 func deduplicateProjectIDs(projectIDs []string) []string {
