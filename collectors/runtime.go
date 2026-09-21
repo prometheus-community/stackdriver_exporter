@@ -60,9 +60,18 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, cfg *config.Config, co
 	}
 
 	var projectIDs []string
+	var discoverProjectIDs func(ctx context.Context, filter string) ([]string, error)
 
 	if cfg.ProjectsFilter != "" {
-		ids, err := getProjectIDsFromFilter(ctx, cfg.ProjectsFilter)
+		resourceManagerService, err := createResourceManagerService(ctx, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Google Cloud Resource Manager service: %w", err)
+		}
+		discoverProjectIDs = func(ctx context.Context, filter string) ([]string, error) {
+			return listProjectIDs(ctx, resourceManagerService, filter)
+		}
+
+		ids, err := discoverProjectIDs(ctx, cfg.ProjectsFilter)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve project IDs from projects_filter: %w", err)
 		}
@@ -96,7 +105,7 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, cfg *config.Config, co
 		logger:                logger,
 		counterStoreFactory:   counterFactory,
 		histogramStoreFactory: histogramFactory,
-		discoverProjectIDs:    getProjectIDsFromFilter,
+		discoverProjectIDs:    discoverProjectIDs,
 	}, nil
 }
 
@@ -259,16 +268,6 @@ func discoverDefaultProjectID(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("unable to identify default GCP project")
 	}
 	return credentials.ProjectID, nil
-}
-
-// getProjectIDsFromFilter returns the list of project IDs that match a Google
-// Cloud organization-scoped projects filter.
-func getProjectIDsFromFilter(ctx context.Context, filter string) ([]string, error) {
-	service, err := cloudresourcemanager.NewService(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return listProjectIDs(ctx, service, filter)
 }
 
 func listProjectIDs(ctx context.Context, service *cloudresourcemanager.Service, filter string) ([]string, error) {

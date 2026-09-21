@@ -19,6 +19,7 @@ import (
 
 	"github.com/PuerkitoBio/rehttp"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/api/monitoring/v3"
 	"google.golang.org/api/option"
 
@@ -59,6 +60,29 @@ func createMonitoringService(ctx context.Context, cfg *config.Config) (*monitori
 	service, err := monitoring.NewService(ctx, option.WithHTTPClient(googleClient), option.WithUniverseDomain(cfg.UniverseDomain))
 	if err != nil {
 		return nil, fmt.Errorf("error creating Google Stackdriver Monitoring service: %w", err)
+	}
+	return service, nil
+}
+
+func createResourceManagerService(ctx context.Context, cfg *config.Config) (*cloudresourcemanager.Service, error) {
+	googleClient, err := google.DefaultClient(ctx, cloudresourcemanager.CloudPlatformReadOnlyScope)
+	if err != nil {
+		return nil, fmt.Errorf("error creating Google client: %w", err)
+	}
+
+	googleClient.Timeout = cfg.HTTPTimeout
+	googleClient.Transport = rehttp.NewTransport(
+		googleClient.Transport,
+		rehttp.RetryAll(
+			rehttp.RetryMaxRetries(cfg.MaxRetries),
+			rehttp.RetryStatuses(cfg.RetryStatuses...),
+		),
+		rehttp.ExpJitterDelay(cfg.BackoffJitter, cfg.MaxBackoff),
+	)
+
+	service, err := cloudresourcemanager.NewService(ctx, option.WithHTTPClient(googleClient))
+	if err != nil {
+		return nil, fmt.Errorf("error creating Google Cloud Resource Manager service: %w", err)
 	}
 	return service, nil
 }
