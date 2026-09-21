@@ -78,7 +78,7 @@ func (d *descriptorCache) Store(prefix string, data []*monitoring.MetricDescript
 // rebuild per request can preserve delta-counter state across calls.
 type collectorCache struct {
 	cache map[string]*collectorCacheEntry
-	lock  sync.RWMutex
+	lock  sync.Mutex
 	ttl   time.Duration
 }
 
@@ -99,8 +99,8 @@ func newCollectorCache(ttl time.Duration) *collectorCache {
 
 // Get returns the cached collector for key, refreshing its TTL on hit.
 func (c *collectorCache) Get(key string) (*MonitoringCollector, bool) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
 	entry, ok := c.cache[key]
 

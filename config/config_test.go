@@ -69,6 +69,9 @@ func TestNewConfigWithDefaults(t *testing.T) {
 	if c.HTTPTimeout != DefaultHTTPTimeout {
 		t.Errorf("HTTPTimeout = %v, want %v", c.HTTPTimeout, DefaultHTTPTimeout)
 	}
+	if c.ProjectsRefreshInterval != DefaultProjectsRefreshInterval {
+		t.Errorf("ProjectsRefreshInterval = %v, want %v", c.ProjectsRefreshInterval, DefaultProjectsRefreshInterval)
+	}
 	if len(c.RetryStatuses) != len(DefaultRetryStatuses) || c.RetryStatuses[0] != DefaultRetryStatuses[0] {
 		t.Errorf("RetryStatuses = %v, want %v", c.RetryStatuses, DefaultRetryStatuses)
 	}

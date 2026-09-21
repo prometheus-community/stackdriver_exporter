@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/oauth2/google"
@@ -38,12 +39,13 @@ type HistogramStoreFactory func(logger *slog.Logger, ttl time.Duration) DeltaHis
 // Runtime holds the resolved state produced by NewRuntime.
 type Runtime struct {
 	cfg                   *config.Config
-	projectIDs            []string
+	projectIDs            *atomic.Pointer[[]string]
 	service               *monitoring.Service
 	logger                *slog.Logger
 	counterStoreFactory   CounterStoreFactory
 	histogramStoreFactory HistogramStoreFactory
 	cache                 *collectorCache
+	discoverProjectIDs    func(ctx context.Context, filter string) ([]string, error)
 }
 
 // NewRuntime resolves project IDs and creates the monitoring service. The
@@ -58,9 +60,18 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, cfg *config.Config, co
 	}
 
 	var projectIDs []string
+	var discoverProjectIDs func(ctx context.Context, filter string) ([]string, error)
 
 	if cfg.ProjectsFilter != "" {
-		ids, err := getProjectIDsFromFilter(ctx, cfg.ProjectsFilter)
+		resourceManagerService, err := createResourceManagerService(ctx, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Google Cloud Resource Manager service: %w", err)
+		}
+		discoverProjectIDs = func(ctx context.Context, filter string) ([]string, error) {
+			return listProjectIDs(ctx, resourceManagerService, filter)
+		}
+
+		ids, err := discoverProjectIDs(ctx, cfg.ProjectsFilter)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve project IDs from projects_filter: %w", err)
 		}
@@ -84,14 +95,57 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, cfg *config.Config, co
 		return nil, err
 	}
 
+	projectIDsPtr := &atomic.Pointer[[]string]{}
+	projectIDsPtr.Store(&projectIDs)
+
 	return &Runtime{
 		cfg:                   cfg,
-		projectIDs:            projectIDs,
+		projectIDs:            projectIDsPtr,
 		service:               service,
 		logger:                logger,
 		counterStoreFactory:   counterFactory,
 		histogramStoreFactory: histogramFactory,
+		discoverProjectIDs:    discoverProjectIDs,
 	}, nil
+}
+
+func (r *Runtime) StartProjectDiscoveryRefresh(ctx context.Context) {
+	if r.cfg.ProjectsFilter == "" || r.cfg.ProjectsRefreshInterval <= 0 {
+		return
+	}
+	go r.refreshProjectIDsLoop(ctx)
+}
+
+func (r *Runtime) refreshProjectIDsLoop(ctx context.Context) {
+	ticker := time.NewTicker(r.cfg.ProjectsRefreshInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			r.refreshProjectIDs(ctx)
+		}
+	}
+}
+
+func (r *Runtime) refreshProjectIDs(ctx context.Context) {
+	ids, err := r.discoverProjectIDs(ctx, r.cfg.ProjectsFilter)
+	if err != nil {
+		r.logger.Warn("failed to refresh project list from google.projects.filter; keeping previous list", "err", err)
+		return
+	}
+
+	ids = append(ids, r.cfg.ProjectIDs...)
+	ids = deduplicateProjectIDs(ids)
+
+	if len(ids) == 0 {
+		r.logger.Warn("google.projects.filter refresh returned zero projects; keeping previous list")
+		return
+	}
+
+	r.projectIDs.Store(&ids)
+	r.logger.Info("refreshed project list from google.projects.filter", "count", len(ids))
 }
 
 // WithCache returns a Runtime configured to cache its collectors per
@@ -125,8 +179,9 @@ func (r *Runtime) CollectorsForPrefixes(prefixFilter []string) ([]*MonitoringCol
 }
 
 func (r *Runtime) buildCollectors(prefixFilter []string) ([]*MonitoringCollector, error) {
-	result := make([]*MonitoringCollector, 0, len(r.projectIDs))
-	for _, projectID := range r.projectIDs {
+	projectIDs := *r.projectIDs.Load()
+	result := make([]*MonitoringCollector, 0, len(projectIDs))
+	for _, projectID := range projectIDs {
 		c, err := r.collectorFor(projectID, prefixFilter)
 		if err != nil {
 			return nil, fmt.Errorf("collector for %q: %w", projectID, err)
@@ -215,16 +270,9 @@ func discoverDefaultProjectID(ctx context.Context) (string, error) {
 	return credentials.ProjectID, nil
 }
 
-// getProjectIDsFromFilter returns the list of project IDs that match a Google
-// Cloud organization-scoped projects filter.
-func getProjectIDsFromFilter(ctx context.Context, filter string) ([]string, error) {
-	service, err := cloudresourcemanager.NewService(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func listProjectIDs(ctx context.Context, service *cloudresourcemanager.Service, filter string) ([]string, error) {
 	var projectIDs []string
-	err = service.Projects.List().Filter(filter).Pages(ctx, func(page *cloudresourcemanager.ListProjectsResponse) error {
+	err := service.Projects.List().Filter(filter).Pages(ctx, func(page *cloudresourcemanager.ListProjectsResponse) error {
 		for _, project := range page.Projects {
 			projectIDs = append(projectIDs, project.ProjectId)
 		}

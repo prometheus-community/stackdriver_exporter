@@ -23,20 +23,21 @@ import (
 )
 
 const (
-	DefaultUniverseDomain       = "googleapis.com"
-	DefaultMaxRetries           = 0
-	DefaultHTTPTimeout          = 10 * time.Second
-	DefaultMaxBackoff           = 5 * time.Second
-	DefaultBackoffJitter        = 1 * time.Second
-	DefaultMetricsInterval      = 5 * time.Minute
-	DefaultMetricsOffset        = 0 * time.Second
-	DefaultMetricsIngest        = false
-	DefaultFillMissing          = true
-	DefaultDropDelegated        = false
-	DefaultAggregateDeltas      = false
-	DefaultDeltasTTL            = 30 * time.Minute
-	DefaultDescriptorTTL        = 0 * time.Second
-	DefaultDescriptorGoogleOnly = true
+	DefaultUniverseDomain          = "googleapis.com"
+	DefaultMaxRetries              = 0
+	DefaultHTTPTimeout             = 10 * time.Second
+	DefaultMaxBackoff              = 5 * time.Second
+	DefaultBackoffJitter           = 1 * time.Second
+	DefaultMetricsInterval         = 5 * time.Minute
+	DefaultMetricsOffset           = 0 * time.Second
+	DefaultMetricsIngest           = false
+	DefaultFillMissing             = true
+	DefaultDropDelegated           = false
+	DefaultAggregateDeltas         = false
+	DefaultDeltasTTL               = 30 * time.Minute
+	DefaultDescriptorTTL           = 0 * time.Second
+	DefaultDescriptorGoogleOnly    = true
+	DefaultProjectsRefreshInterval = 0 * time.Second
 )
 
 // DefaultRetryStatuses must be treated as immutable after declaration.
@@ -45,6 +46,7 @@ var DefaultRetryStatuses = []int{http.StatusServiceUnavailable}
 type Config struct {
 	ProjectIDs                []string
 	ProjectsFilter            string
+	ProjectsRefreshInterval   time.Duration
 	UniverseDomain            string
 	MaxRetries                int
 	HTTPTimeout               time.Duration
@@ -87,6 +89,7 @@ func NewConfigWithDefaults() *Config {
 		AggregateDeltasTTL:        DefaultDeltasTTL,
 		DescriptorCacheTTL:        DefaultDescriptorTTL,
 		DescriptorCacheOnlyGoogle: DefaultDescriptorGoogleOnly,
+		ProjectsRefreshInterval:   DefaultProjectsRefreshInterval,
 	}
 }
 
