@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/KimMachineGun/automemlimit/memlimit"
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
@@ -228,6 +229,9 @@ func main() {
 	kingpin.Parse()
 
 	logger := promslog.New(promslogConfig)
+
+	_, _ = memlimit.Set(memlimit.WithLogger(logger))
+
 	if *projectID != "" {
 		logger.Warn("The google.project-id flag is deprecated and will be replaced by google.project-ids.")
 	}

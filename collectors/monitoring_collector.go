@@ -29,6 +29,10 @@ import (
 
 const namespace = "stackdriver"
 
+const maxConcurrentTimeSeriesRequests = 20
+
+var timeSeriesRequestLimiter = make(chan struct{}, maxConcurrentTimeSeriesRequests)
+
 type MetricFilter struct {
 	TargetedMetricPrefix string
 	FilterQuery          string
@@ -338,6 +342,9 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				}
 
 				c.logger.Debug("retrieving Google Stackdriver Monitoring metrics with filter", "filter", filter)
+
+				timeSeriesRequestLimiter <- struct{}{}
+				defer func() { <-timeSeriesRequestLimiter }()
 
 				timeSeriesListCall := c.monitoringService.Projects.TimeSeries.List(projectResource(c.projectID)).
 					Filter(filter).
