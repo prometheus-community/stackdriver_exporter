@@ -16,13 +16,14 @@ jobs:
     container:
       # Whenever the Go version is updated here, .promu.yml
       # should also be updated.
-      image: quay.io/prometheus/golang-builder:1.26-base
+      image: quay.io/prometheus/golang-builder:1.27-base
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: prometheus/promci-setup@55bd31fe92710532260eb57c554f2697363285c5 # v0.2.2
       - run: make GO_ONLY=1 SKIP_GOLANGCI_LINT=1
+      - run: git diff --exit-code
 
   build:
     name: Build
@@ -36,8 +37,8 @@ jobs:
           parallelism: 4
           thread: ${{ matrix.thread }}
 
-  publish_main:
-    name: Publish main branch artifacts
+  publish_default:
+    name: Publish default branch artifacts
     runs-on: ubuntu-latest
     permissions:
       packages: write
