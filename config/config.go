@@ -37,6 +37,7 @@ const (
 	DefaultDeltasTTL               = 30 * time.Minute
 	DefaultDescriptorTTL           = 0 * time.Second
 	DefaultDescriptorGoogleOnly    = true
+	DefaultActiveOnly              = false
 	DefaultProjectsRefreshInterval = 0 * time.Second
 )
 
@@ -64,6 +65,7 @@ type Config struct {
 	AggregateDeltasTTL        time.Duration
 	DescriptorCacheTTL        time.Duration
 	DescriptorCacheOnlyGoogle bool
+	ActiveOnly                bool
 
 	// validated is set by Validate on success.
 	validated bool
@@ -89,6 +91,7 @@ func NewConfigWithDefaults() *Config {
 		AggregateDeltasTTL:        DefaultDeltasTTL,
 		DescriptorCacheTTL:        DefaultDescriptorTTL,
 		DescriptorCacheOnlyGoogle: DefaultDescriptorGoogleOnly,
+		ActiveOnly:                DefaultActiveOnly,
 		ProjectsRefreshInterval:   DefaultProjectsRefreshInterval,
 	}
 }
