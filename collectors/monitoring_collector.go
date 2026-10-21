@@ -82,6 +82,7 @@ type MonitoringCollector struct {
 	histogramStore                  DeltaHistogramStore
 	aggregateDeltas                 bool
 	descriptorCache                 DescriptorCache
+	activeOnly                      bool
 }
 
 type MonitoringCollectorOptions struct {
@@ -109,6 +110,8 @@ type MonitoringCollectorOptions struct {
 	DescriptorCacheTTL time.Duration
 	// DescriptorCacheOnlyGoogle decides whether only google specific descriptors should be cached or all
 	DescriptorCacheOnlyGoogle bool
+	// ActiveOnly decides if only metric types with recent data (roughly the last 25 hours) should be listed and queried
+	ActiveOnly bool
 }
 
 func isGoogleMetric(name string) bool {
@@ -240,6 +243,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		histogramStore:                  histogramStore,
 		aggregateDeltas:                 opts.AggregateDeltas,
 		descriptorCache:                 descriptorCache,
+		activeOnly:                      opts.ActiveOnly,
 	}
 
 	return monitoringCollector, nil
@@ -406,9 +410,12 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				}
 
 				c.logger.Debug("listing Google Stackdriver Monitoring metric descriptors starting with", "prefix", metricsTypePrefix)
-				if err := c.monitoringService.Projects.MetricDescriptors.List(projectResource(c.projectID)).
-					Filter(filter).
-					Pages(ctx, callback); err != nil {
+				descriptorsListCall := c.monitoringService.Projects.MetricDescriptors.List(projectResource(c.projectID)).
+					Filter(filter)
+				if c.activeOnly {
+					descriptorsListCall.ActiveOnly(true)
+				}
+				if err := descriptorsListCall.Pages(ctx, callback); err != nil {
 					errChannel <- err
 				}
 
