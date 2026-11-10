@@ -14,8 +14,18 @@
 package collectors
 
 import (
+	"context"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"testing"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/api/monitoring/v3"
+	"google.golang.org/api/option"
 )
 
 func TestIsGoogleMetric(t *testing.T) {
@@ -111,5 +121,69 @@ func TestProjectResource(t *testing.T) {
 
 	if got := projectResource("fake-project-1"); got != "projects/fake-project-1" {
 		t.Fatalf("projectResource() = %q, want %q", got, "projects/fake-project-1")
+	}
+}
+
+func TestMetricDescriptorsListActiveOnly(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		activeOnly bool
+		want       []string
+	}{
+		{
+			name:       "set",
+			activeOnly: true,
+			want:       []string{"true"},
+		},
+		{
+			name:       "unset",
+			activeOnly: false,
+			want:       nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			requests := make(chan url.Values, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v3/projects/fake-project-1/metricDescriptors" {
+					t.Errorf("unexpected request path %q", r.URL.Path)
+				}
+				requests <- r.URL.Query()
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte("{}"))
+			}))
+			t.Cleanup(server.Close)
+
+			service, err := monitoring.NewService(context.Background(),
+				option.WithEndpoint(server.URL),
+				option.WithHTTPClient(server.Client()),
+				option.WithoutAuthentication(),
+			)
+			if err != nil {
+				t.Fatalf("monitoring.NewService() error = %v", err)
+			}
+
+			collector, err := NewMonitoringCollector("fake-project-1", service, MonitoringCollectorOptions{
+				MetricTypePrefixes: []string{"compute.googleapis.com/instance/cpu"},
+				ActiveOnly:         tt.activeOnly,
+			}, slog.New(slog.DiscardHandler), nil, nil)
+			if err != nil {
+				t.Fatalf("NewMonitoringCollector() error = %v", err)
+			}
+
+			if err := collector.reportMonitoringMetrics(make(chan prometheus.Metric), time.Now()); err != nil {
+				t.Fatalf("reportMonitoringMetrics() error = %v", err)
+			}
+
+			got := (<-requests)["activeOnly"]
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("activeOnly query = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
