@@ -287,6 +287,9 @@ func main() {
 		http.Handle(*metricsPath, promhttp.Handler())
 	}
 
+	http.HandleFunc("/-/healthy", healthCheckHandler)
+	http.HandleFunc("/-/ready", healthCheckHandler)
+
 	if *metricsPath != "/" && *metricsPath != "" {
 		landingConfig := web.LandingConfig{
 			Name:        "Stackdriver Exporter",
@@ -296,6 +299,14 @@ func main() {
 				{
 					Address: *metricsPath,
 					Text:    "Metrics",
+				},
+				{
+					Address: "/-/healthy",
+					Text:    "Healthy",
+				},
+				{
+					Address: "/-/ready",
+					Text:    "Ready",
 				},
 			},
 		}
@@ -320,6 +331,11 @@ func main() {
 		logger.Error("Error starting server", "err", err)
 		os.Exit(1)
 	}
+}
+
+func healthCheckHandler(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, "OK")
 }
 
 func collectorConfigFromFlags() *config.Config {
