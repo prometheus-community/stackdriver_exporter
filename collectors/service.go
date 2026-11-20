@@ -38,6 +38,7 @@ func monitoringCollectorOptionsForPrefixes(cfg *config.Config, metricPrefixes []
 		AggregateDeltas:           cfg.AggregateDeltas,
 		DescriptorCacheTTL:        cfg.DescriptorCacheTTL,
 		DescriptorCacheOnlyGoogle: cfg.DescriptorCacheOnlyGoogle,
+		ActiveOnly:                cfg.ActiveOnly,
 	}
 }
 

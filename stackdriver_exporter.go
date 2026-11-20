@@ -140,6 +140,10 @@ var (
 	monitoringDescriptorCacheOnlyGoogle = kingpin.Flag(
 		"monitoring.descriptor-cache-only-google", "Only cache descriptors for *.googleapis.com metrics",
 	).Default(strconv.FormatBool(config.DefaultDescriptorGoogleOnly)).Bool()
+
+	monitoringActiveOnly = kingpin.Flag(
+		"monitoring.active-only", "Only collect metric types that have recent data in the project (Cloud Monitoring activeOnly, roughly the last 25 hours)",
+	).Default(strconv.FormatBool(config.DefaultActiveOnly)).Bool()
 )
 
 func init() {
@@ -344,6 +348,7 @@ func collectorConfigFromFlags() *config.Config {
 		AggregateDeltasTTL:        *monitoringMetricsDeltasTTL,
 		DescriptorCacheTTL:        *monitoringDescriptorCacheTTL,
 		DescriptorCacheOnlyGoogle: *monitoringDescriptorCacheOnlyGoogle,
+		ActiveOnly:                *monitoringActiveOnly,
 	}
 }
 
