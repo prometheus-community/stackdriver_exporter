@@ -1,5 +1,7 @@
 ## master / unreleased
 
+- [BUGFIX] Do not cache a metric descriptor listing that failed part way through.
+
 ## 0.19.0 / 2026-06-05
 
 - [FEATURE] Add `google.universe-domain` flag to specify the Google Cloud universe to use. #430
