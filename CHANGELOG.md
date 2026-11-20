@@ -1,6 +1,6 @@
 ## master / unreleased
 
-- [BUGFIX] Do not cache a metric descriptor listing that failed part way through.
+- [BUGFIX] Do not cache a metric descriptor listing that failed part way through. #572
 
 ## 0.19.0 / 2026-06-05
 
