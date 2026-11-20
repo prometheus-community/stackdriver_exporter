@@ -14,6 +14,9 @@
 package main
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -44,5 +47,33 @@ func TestCollectorConfigFromFlagsDefaultsProjectsRefreshIntervalToDisabled(t *te
 	cfg := collectorConfigFromFlags()
 	if cfg.ProjectsRefreshInterval != config.DefaultProjectsRefreshInterval {
 		t.Fatalf("ProjectsRefreshInterval = %v, want default %v", cfg.ProjectsRefreshInterval, config.DefaultProjectsRefreshInterval)
+	}
+}
+
+func TestHealthCheckHandler(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/-/healthy", healthCheckHandler)
+	mux.HandleFunc("/-/ready", healthCheckHandler)
+
+	for _, path := range []string{"/-/healthy", "/-/ready"} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rrw := httptest.NewRecorder()
+			mux.ServeHTTP(rrw, req)
+
+			res := rrw.Result()
+			defer res.Body.Close()
+
+			if res.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusOK)
+			}
+			body, err := io.ReadAll(res.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			if got := string(body); got != "OK" {
+				t.Fatalf("body = %q, want %q", got, "OK")
+			}
+		})
 	}
 }
