@@ -82,6 +82,7 @@ type MonitoringCollector struct {
 	histogramStore                  DeltaHistogramStore
 	aggregateDeltas                 bool
 	descriptorCache                 DescriptorCache
+	helpStore                       *MetricHelpStore
 }
 
 type MonitoringCollectorOptions struct {
@@ -109,6 +110,10 @@ type MonitoringCollectorOptions struct {
 	DescriptorCacheTTL time.Duration
 	// DescriptorCacheOnlyGoogle decides whether only google specific descriptors should be cached or all
 	DescriptorCacheOnlyGoogle bool
+	// MetricHelpStore keeps one help text per metric name. Pass the same store to every collector registered in
+	// the same registry, so that projects describing a metric type differently do not fail the gather. When nil,
+	// the collector uses a store of its own.
+	MetricHelpStore *MetricHelpStore
 }
 
 func isGoogleMetric(name string) bool {
@@ -219,6 +224,11 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 
 	}
 
+	helpStore := opts.MetricHelpStore
+	if helpStore == nil {
+		helpStore = NewMetricHelpStore()
+	}
+
 	monitoringCollector := &MonitoringCollector{
 		projectID:                       projectID,
 		metricsTypePrefixes:             opts.MetricTypePrefixes,
@@ -240,6 +250,7 @@ func NewMonitoringCollector(projectID string, monitoringService *monitoring.Serv
 		histogramStore:                  histogramStore,
 		aggregateDeltas:                 opts.AggregateDeltas,
 		descriptorCache:                 descriptorCache,
+		helpStore:                       helpStore,
 	}
 
 	return monitoringCollector, nil
@@ -440,6 +451,7 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 		c.counterStore,
 		c.histogramStore,
 		c.aggregateDeltas,
+		c.helpStore,
 	)
 	if err != nil {
 		return fmt.Errorf("error creating the TimeSeriesMetrics %v", err)

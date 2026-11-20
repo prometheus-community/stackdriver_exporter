@@ -45,6 +45,7 @@ type Runtime struct {
 	counterStoreFactory   CounterStoreFactory
 	histogramStoreFactory HistogramStoreFactory
 	cache                 *collectorCache
+	helpStore             *MetricHelpStore
 	discoverProjectIDs    func(ctx context.Context, filter string) ([]string, error)
 }
 
@@ -105,6 +106,7 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, cfg *config.Config, co
 		logger:                logger,
 		counterStoreFactory:   counterFactory,
 		histogramStoreFactory: histogramFactory,
+		helpStore:             NewMetricHelpStore(),
 		discoverProjectIDs:    discoverProjectIDs,
 	}, nil
 }
@@ -209,10 +211,12 @@ func (r *Runtime) collectorFor(projectID string, prefixFilter []string) (*Monito
 
 func (r *Runtime) newCollector(projectID string, prefixFilter []string) (*MonitoringCollector, error) {
 	filtered := r.filterMetricTypePrefixes(prefixFilter)
+	opts := monitoringCollectorOptionsForPrefixes(r.cfg, filtered)
+	opts.MetricHelpStore = r.helpStore
 	return NewMonitoringCollector(
 		projectID,
 		r.service,
-		monitoringCollectorOptionsForPrefixes(r.cfg, filtered),
+		opts,
 		r.logger,
 		r.counterStoreFactory(r.logger, r.cfg.AggregateDeltasTTL),
 		r.histogramStoreFactory(r.logger, r.cfg.AggregateDeltasTTL),
