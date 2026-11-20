@@ -409,10 +409,12 @@ func (c *MonitoringCollector) reportMonitoringMetrics(ch chan<- prometheus.Metri
 				if err := c.monitoringService.Projects.MetricDescriptors.List(projectResource(c.projectID)).
 					Filter(filter).
 					Pages(ctx, callback); err != nil {
+					// Keep a partial listing out of the cache, otherwise the
+					// missing descriptors stay missing until the entry expires.
 					errChannel <- err
+				} else {
+					c.descriptorCache.Store(metricsTypePrefix, cache)
 				}
-
-				c.descriptorCache.Store(metricsTypePrefix, cache)
 			}
 		}(metricsTypePrefix)
 	}
