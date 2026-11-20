@@ -189,6 +189,30 @@ stackdriver_exporter \
   --google.projects.filter='labels.monitoring="true"'
 ```
 
+### Memory limits in constrained environments
+
+When `google.projects.filter` (or a long, repeated `google.project-ids`) resolves to many
+projects, each scrape fetches metrics for every metric descriptor of every project. In
+memory-constrained environments (e.g. a GKE pod with a small memory limit), an unbounded
+fan-out of concurrent Monitoring API requests and JSON decodes can grow the heap enough to
+OOM the process. Two fixes address this together, and neither requires configuration:
+
+- Concurrent `TimeSeries.List` requests are capped process-wide at a fixed internal limit,
+  so a scrape can never have more than that many API responses in memory at once, no matter
+  how many projects or descriptors it fans out across.
+- `stackdriver_exporter` also reads the container's memory limit (from the cgroup) at
+  startup and sets Go's [`GOMEMLIMIT`][gomemlimit] to 90% of it, via
+  [`automemlimit`][automemlimit]. This makes the garbage collector reclaim memory more
+  aggressively as usage approaches the limit. This happens automatically whenever a memory
+  limit is set on the container (e.g. `resources.limits.memory` in a Kubernetes pod spec).
+
+If you need to override the detected value, set the `GOMEMLIMIT` environment variable
+directly, or `AUTOMEMLIMIT` to change the ratio (or `off` to disable auto-detection
+entirely).
+
+[gomemlimit]: https://pkg.go.dev/runtime/debug#SetMemoryLimit
+[automemlimit]: https://github.com/KimMachineGun/automemlimit
+
 ### Filtering enabled collectors
 
 The `stackdriver_exporter` collects all metrics type prefixes by default.

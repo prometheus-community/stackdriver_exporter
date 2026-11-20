@@ -14,8 +14,20 @@
 package collectors
 
 import (
+	"context"
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/api/monitoring/v3"
+	"google.golang.org/api/option"
 )
 
 func TestIsGoogleMetric(t *testing.T) {
@@ -112,4 +124,116 @@ func TestProjectResource(t *testing.T) {
 	if got := projectResource("fake-project-1"); got != "projects/fake-project-1" {
 		t.Fatalf("projectResource() = %q, want %q", got, "projects/fake-project-1")
 	}
+}
+
+func TestTimeSeriesRequestLimiterBoundsConcurrency(t *testing.T) {
+	numDescriptors := maxConcurrentTimeSeriesRequests + 10
+
+	var (
+		mu          sync.Mutex
+		inFlight    int
+		maxInFlight int
+	)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "metricDescriptors"):
+			descriptors := make([]*monitoring.MetricDescriptor, 0, numDescriptors)
+			for i := 0; i < numDescriptors; i++ {
+				descriptors = append(descriptors, &monitoring.MetricDescriptor{
+					Type: "custom.googleapis.com/metric_" + strings.Repeat("a", i+1),
+				})
+			}
+			writeJSONResponse(w, &monitoring.ListMetricDescriptorsResponse{MetricDescriptors: descriptors})
+
+		case strings.Contains(r.URL.Path, "timeSeries"):
+			mu.Lock()
+			inFlight++
+			if inFlight > maxInFlight {
+				maxInFlight = inFlight
+			}
+			mu.Unlock()
+
+			time.Sleep(50 * time.Millisecond)
+
+			mu.Lock()
+			inFlight--
+			mu.Unlock()
+
+			writeJSONResponse(w, &monitoring.ListTimeSeriesResponse{})
+
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	ctx := context.Background()
+	service, err := monitoring.NewService(ctx,
+		option.WithHTTPClient(server.Client()),
+		option.WithEndpoint(server.URL),
+		option.WithoutAuthentication(),
+	)
+	if err != nil {
+		t.Fatalf("failed to create monitoring service: %v", err)
+	}
+
+	logger := slog.New(slog.DiscardHandler)
+
+	collector, err := NewMonitoringCollector(
+		"test-project",
+		service,
+		MonitoringCollectorOptions{
+			MetricTypePrefixes: []string{"custom.googleapis.com"},
+			RequestInterval:    5 * time.Minute,
+			DescriptorCacheTTL: 0,
+		},
+		logger,
+		noopCounterStore{},
+		noopHistogramStore{},
+	)
+	if err != nil {
+		t.Fatalf("failed to create collector: %v", err)
+	}
+
+	ch := make(chan prometheus.Metric, numDescriptors+10)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range ch {
+		}
+	}()
+
+	collector.Collect(ch)
+	close(ch)
+	<-done
+
+	mu.Lock()
+	observed := maxInFlight
+	mu.Unlock()
+
+	if observed > maxConcurrentTimeSeriesRequests {
+		t.Fatalf("observed %d concurrent TimeSeries.List requests, want <= %d", observed, maxConcurrentTimeSeriesRequests)
+	}
+	if observed < maxConcurrentTimeSeriesRequests {
+		t.Fatalf("expected concurrency to reach the limiter's capacity %d, got max observed %d; test may not be exercising real contention", maxConcurrentTimeSeriesRequests, observed)
+	}
+}
+
+type noopCounterStore struct{}
+
+func (noopCounterStore) Increment(*monitoring.MetricDescriptor, *ConstMetric) {}
+func (noopCounterStore) ListMetrics(string) []*ConstMetric                    { return nil }
+
+type noopHistogramStore struct{}
+
+func (noopHistogramStore) Increment(*monitoring.MetricDescriptor, *HistogramMetric) {}
+func (noopHistogramStore) ListMetrics(string) []*HistogramMetric                    { return nil }
+
+func writeJSONResponse(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(v)
 }
