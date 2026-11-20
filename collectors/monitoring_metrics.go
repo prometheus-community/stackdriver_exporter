@@ -60,6 +60,7 @@ type timeSeriesMetrics struct {
 	counterStore    DeltaCounterStore
 	histogramStore  DeltaHistogramStore
 	aggregateDeltas bool
+	helpStore       *MetricHelpStore
 }
 
 func newTimeSeriesMetrics(descriptor *monitoring.MetricDescriptor,
@@ -67,7 +68,8 @@ func newTimeSeriesMetrics(descriptor *monitoring.MetricDescriptor,
 	fillMissingLabels bool,
 	counterStore DeltaCounterStore,
 	histogramStore DeltaHistogramStore,
-	aggregateDeltas bool) (*timeSeriesMetrics, error) {
+	aggregateDeltas bool,
+	helpStore *MetricHelpStore) (*timeSeriesMetrics, error) {
 
 	return &timeSeriesMetrics{
 		metricDescriptor:  descriptor,
@@ -78,13 +80,14 @@ func newTimeSeriesMetrics(descriptor *monitoring.MetricDescriptor,
 		counterStore:      counterStore,
 		histogramStore:    histogramStore,
 		aggregateDeltas:   aggregateDeltas,
+		helpStore:         helpStore,
 	}, nil
 }
 
 func (t *timeSeriesMetrics) newMetricDesc(fqName string, labelKeys []string) *prometheus.Desc {
 	return prometheus.NewDesc(
 		fqName,
-		t.metricDescriptor.Description,
+		t.helpStore.Help(fqName, t.metricDescriptor.Description),
 		labelKeys,
 		prometheus.Labels{},
 	)

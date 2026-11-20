@@ -421,3 +421,26 @@ func TestWithCacheSharesProjectIDsPointer(t *testing.T) {
 		t.Fatalf("sibling.Collectors() returned %d collectors after original's projectIDs updated, want 2", len(cs))
 	}
 }
+
+func TestRuntimeCollectorsShareMetricHelpStore(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{MetricsPrefixes: []string{"custom.googleapis.com/"}}
+	r := newTestRuntime(t, cfg, []string{"project-a", "project-b"}, nil)
+	r.counterStoreFactory = func(_ *slog.Logger, _ time.Duration) DeltaCounterStore { return nil }
+	r.histogramStoreFactory = func(_ *slog.Logger, _ time.Duration) DeltaHistogramStore { return nil }
+	r.helpStore = NewMetricHelpStore()
+
+	collectors, err := r.WithCache().Collectors()
+	if err != nil {
+		t.Fatalf("Collectors() error = %v", err)
+	}
+	if len(collectors) != 2 {
+		t.Fatalf("Collectors() returned %d collectors, want 2", len(collectors))
+	}
+	for _, c := range collectors {
+		if c.helpStore != r.helpStore {
+			t.Fatalf("collector for %s does not use the runtime's help store", c.projectID)
+		}
+	}
+}
